@@ -587,7 +587,8 @@ class XGBModel(PredBase):
     # XGBoostモデルのトレーニング
     model = xgb.XGBClassifier(objective='binary:logistic', max_depth=6, learning_rate=0.1, n_estimators=100, n_jobs=-1)
     model.fit(X_train_smote, y_train_smote)
-    if self.threshold!= None:
+
+    if self.threshold is not None:
       y_pred_proba = model.predict_proba(X_test)[:, 1]  # 予測確率を取得
       y_pred = (y_pred_proba >= self.threshold).astype(int)
     else:
@@ -618,15 +619,15 @@ class XGBModel(PredBase):
     
 
     # 閾値の有無
-    if self.threshold == None:
-      predicted_target = self.model.predict(df_x)
-
-    else:
+    if self.threshold is not None:
       # テストデータで予測 (確率を取得)
       y_pred_proba = self.model.predict_proba(df_x)[:, 1]
       # 閾値を基準にクラスを決定
       predicted_target = (y_pred_proba >= self.threshold).astype(int)
 
+    else:
+      predicted_target = self.model.predict(df_x)
+      
 
     # 元の pred_df に予測結果を追加
     df_p['predicted_proba'] = self.model.predict_proba(df_x)[:, 1]
