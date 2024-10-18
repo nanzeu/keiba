@@ -2,11 +2,15 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 import category_encoders as ce
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, classification_report
 from imblearn.over_sampling import SMOTE
+
+from sklearn.ensemble import RandomForestClassifier
+import lightgbm as lgb
+import xgboost as xgb
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -51,11 +55,20 @@ class PredBase:
     df = self.process_missing_values(df)
 
     # カウントエンコーディング
-    count_enc = ce.CountEncoder(cols=['horse_id', 'trainer_id', 'jockey_id', 'owner_id'])
-    df_encoded = count_enc.fit_transform(df[['horse_id', 'trainer_id', 'jockey_id', 'owner_id']])
-    
+    count_enc = ce.CountEncoder(cols=['date'])
+    df_ce = count_enc.fit_transform(df[['date']])
+
+    # ラベルエンコーディング
+    df_le = pd.DataFrame()
+    self.encoded_features = ['date_encoded', 'parent_0', 'parent_1', 'parent_2', 'parent_3', 'parent_4', 'parent_5']
+    for col in ['horse_id', 'jockey_id', 'trainer_id', 'owner_id']:
+      le = LabelEncoder()
+      df_le[col] = le.fit_transform(df[col])
+
+      self.encoded_features.append(f'{col}_encoded')
+
     # 元のデータフレームにエンコードされた列を追加
-    df = df.join(df_encoded, rsuffix='_encoded')
+    df = df.join(pd.concat([df_ce, df_le], axis=1), rsuffix='_encoded')
 
     return df
   
@@ -254,7 +267,7 @@ class RFModel(PredBase):
     # ランダムフォレストモデルのトレーニング
     model = RandomForestClassifier(random_state=42)
     model.fit(X_train_smote, y_train_smote)
-    if self.threshold != None:
+    if self.threshold is not None:
       y_pred_proba = model.predict_proba(X_test)[:, 1]  # 予測確率を取得
       y_pred = (y_pred_proba >= self.threshold).astype(int)
     else:
@@ -285,14 +298,14 @@ class RFModel(PredBase):
     
 
     # 閾値の有無
-    if self.threshold == None:
-      predicted_target = self.model.predict(df_x)
-
-    else:
+    if self.threshold is not None:
       # テストデータで予測 (確率を取得)
       y_pred_proba = self.model.predict_proba(df_x)[:, 1]
       # 閾値を基にクラスを決定
       predicted_target = (y_pred_proba >= self.threshold).astype(int)
+
+    else:
+      predicted_target = self.model.predict(df_x)
 
 
     # 元の pred_df に予測結果を追加
@@ -320,6 +333,7 @@ class NNModel(PredBase):
     if model:
       self.model = model
     else:
+      self.scaler = StandardScaler()
       self.embedding_dim = embedding_dim
       self.model = self.model_train()
 
@@ -341,8 +355,13 @@ class NNModel(PredBase):
     X = df_p.drop(['target'], axis=1)
     y = df_p['target']
 
+    # データ正規化 (標準化)
+    self.scaler.fit(X)
+    X_scaled = self.scaler.transform(X)
+    X_scaled = pd.DataFrame(X_scaled, columns=X.columns)
+
     # データ分割 (ID列と数値列を分割する)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
     # 数値データのみにSMOTEを適用
     smote = SMOTE(random_state=42)
@@ -395,7 +414,7 @@ class NNModel(PredBase):
     model.eval()
     X_test_tensor = torch.tensor(X_test.values, dtype=torch.float32)
     y_pred_proba = model(X_test_tensor).detach().numpy()
-    y_pred = (y_pred_proba >= (self.threshold if self.threshold else 0.5)).astype(int)
+    y_pred = (y_pred_proba >= (self.threshold if self.threshold is not None else 0.5)).astype(int)
 
     print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
     print("Classification Report:\n", classification_report(y_test, y_pred))
@@ -410,8 +429,13 @@ class NNModel(PredBase):
     # 新しいデータに同様の前処理を行う
     df_p = self.preprocess_df(df)
     df_x = self.drop_columns(df_p)
+
+    # データ正規化 (標準化)
+    self.scaler.fit(df_x)
+    df_x_scaled = self.scaler.transform(df_x)
+    df_x_scaled = pd.DataFrame(df_x_scaled, columns=df_x.columns)
     
-    x_tensor = torch.tensor(df_x.values, dtype=torch.float32)
+    x_tensor = torch.tensor(df_x_scaled.values, dtype=torch.float32)
 
     # モデルを評価モードに切り替え
     self.model.eval()
@@ -421,12 +445,191 @@ class NNModel(PredBase):
       y_pred_proba = self.model(x_tensor).detach().numpy()
 
     # 確率を0, 1に変換 (しきい値0.5を基準に)
-    if self.threshold:
+    if self.threshold is not None:
       predicted_target = (y_pred_proba >= self.threshold).astype(int)
     else:
       predicted_target = (y_pred_proba >= 0.5).astype(int)
     
     df_p['predicted_proba'] = y_pred_proba
+    df_p['predicted_target'] = predicted_target
+
+    return df_p
+  
+
+class LGBModel(PredBase):
+  def __init__(
+    self, 
+    train_df, 
+    returns_df, 
+    bet_type='umaren', 
+    threshold=None, 
+    stochastic_variation=True, 
+    model=None
+  ):
+
+    # 学習データと払戻データを初期化
+    super().__init__(train_df, returns_df, bet_type, threshold, stochastic_variation)
+    self.model_type = 'lgb'
+    self.threshold = threshold
+    self.model = model if model else self.model_train()
+
+  
+  def model_train(self):
+    """訓練データを使ってモデルをトレーニング"""
+    df = self.df.copy()
+
+    if self.bet_type in ['umaren', 'umatan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
+    elif self.bet_type in ['sanrenpuku','sanrentan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
+    else:
+      raise RuntimeError(f"{self.bet_type} is not supported.")
+    
+    # ラベルエンコーディングと不要なカラムの処理
+    df = self.preprocess_df(df)
+    df_p = self.drop_columns(df)
+
+    # データ分割
+    X = df_p.drop(['target'], axis=1)
+    y = df_p['target']
+
+    # データ分割
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # オーバーサンプリング
+    smote = SMOTE(random_state=42)
+    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+      
+    # LightGBMモデルのトレーニング
+    train_data = lgb.Dataset(X_train_smote, label=y_train_smote)
+    params = {'objective': 'binary','metric': 'auc', 'boosting_type': 'gbdt', 'num_leaves': 31, 'learning_rate': 0.05}
+    model = lgb.train(params, train_data, num_boost_round=100)
+    y_pred_proba = model.predict(X_test)  # 予測確率を取得
+    y_pred = (y_pred_proba >= (self.threshold if self.threshold is not None else 0.5)).astype(int)
+
+    # モデルの評価結果を出力
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+
+    # LightGBMの場合、特徴量の重要度を表示
+    feature_importance = pd.DataFrame({
+      'feature': X.columns,
+      'importance': model.feature_importance()
+    }).sort_values('importance', ascending=False)
+    print("Feature Importance:\n", feature_importance.head(20))
+
+    return model
+  
+
+  def predict_target(self, pred_df):
+    """予測結果を生成"""
+    # pred_dfをコピーして予測用に加工
+    df = pred_df.copy()
+
+    # ラベルエンコーディングと不要なカラムの処理
+    df_p = self.preprocess_df(df)
+    df_x = self.drop_columns(df_p)
+    
+    # 閾値の有無
+    y_pred_proba = self.model.predict(df_x)  # 予測確率を取得
+    predicted_target = (y_pred_proba >= (self.threshold if self.threshold is not None else 0.5)).astype(int)
+
+    # 元の pred_df に予測結果を追加
+    df_p['predicted_proba'] = y_pred_proba
+    df_p['predicted_target'] = predicted_target
+
+    return df_p
+		
+
+class XGBModel(PredBase):
+  def __init__(
+    self, 
+    train_df, 
+    returns_df, 
+    bet_type='umaren', 
+    threshold=None, 
+    stochastic_variation=True, 
+    model=None
+  ):
+
+    # 学習データと払戻データを初期化
+    super().__init__(train_df, returns_df, bet_type, threshold, stochastic_variation)
+    self.model_type = 'xgb'
+    self.model = model if model else self.model_train()
+  
+
+  def model_train(self):
+    """訓練データを使ってモデルをトレーニング"""
+    df = self.df.copy()
+
+    if self.bet_type in ['umaren', 'umatan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
+    elif self.bet_type in ['sanrenpuku','sanrentan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
+    else:
+      raise RuntimeError(f"{self.bet_type} is not supported.")
+    
+    # ラベルエンコーディングと不要なカラムの処理
+    df = self.preprocess_df(df)
+    df_p = self.drop_columns(df)
+
+    # データ分割
+    X = df_p.drop(['target'], axis=1)
+    y = df_p['target']
+
+    # データ分割
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # オーバーサンプリング
+    smote = SMOTE(random_state=42)
+    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+      
+    # XGBoostモデルのトレーニング
+    model = xgb.XGBClassifier(objective='binary:logistic', max_depth=6, learning_rate=0.1, n_estimators=100, n_jobs=-1)
+    model.fit(X_train_smote, y_train_smote)
+    if self.threshold!= None:
+      y_pred_proba = model.predict_proba(X_test)[:, 1]  # 予測確率を取得
+      y_pred = (y_pred_proba >= self.threshold).astype(int)
+    else:
+      y_pred = model.predict(X_test)
+
+    # モデルの評価結果を出力
+    print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
+    print("Classification Report:\n", classification_report(y_test, y_pred))
+
+    # XGBoostの場合、特徴量の重要度を表示
+    feature_importance = pd.DataFrame({
+      'feature': X.columns,
+      'importance': model.feature_importances_
+    }).sort_values('importance', ascending=False)
+    print("Feature Importance:\n", feature_importance.head(20))
+
+    return model
+  
+
+  def predict_target(self, pred_df):
+    """予測結果を生成"""
+    # pred_dfをコピーして予測用に加工
+    df = pred_df.copy()
+
+    # ラベルエンコーディングと不要なカラムの処理
+    df_p = self.preprocess_df(df)
+    df_x = self.drop_columns(df_p)
+    
+
+    # 閾値の有無
+    if self.threshold == None:
+      predicted_target = self.model.predict(df_x)
+
+    else:
+      # テストデータで予測 (確率を取得)
+      y_pred_proba = self.model.predict_proba(df_x)[:, 1]
+      # 閾値を基準にクラスを決定
+      predicted_target = (y_pred_proba >= self.threshold).astype(int)
+
+
+    # 元の pred_df に予測結果を追加
+    df_p['predicted_proba'] = self.model.predict_proba(df_x)[:, 1]
     df_p['predicted_target'] = predicted_target
 
     return df_p

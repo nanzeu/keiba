@@ -122,7 +122,7 @@ class Horse:
 
     # レース間隔をカテゴリ化（7日以内, 30日以内, 90日以内）
     features['race_interval_category'] = pd.cut(features['days_since_last_race'], 
-                                          bins=[0, 7, 30, 90, float('inf')], 
+                                          bins=[0, 10, 30, 90, float('inf')], 
                                           labels=[0, 1, 2, 3])
     
     # 不要なカラムを削除
