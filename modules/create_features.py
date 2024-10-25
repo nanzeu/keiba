@@ -97,6 +97,7 @@ class Horse:
     features['consistency'] = features['rank_max'] - features['rank_min']
 
     features['time_per_course_len'] = features['time_mean'] / features['course_len_mean']
+    features['3_furlongs_per_course_len'] = features['3_furlongs_mean'] / features['course_len_mean']
 
     # 最頻値のコース距離を計算
     course_len_mode = past_results.groupby(['horse_id', 'reference_date'])['course_len'].agg(

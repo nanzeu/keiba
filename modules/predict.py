@@ -5,8 +5,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import category_encoders as ce
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, classification_report, accuracy_score
-from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import KFold, cross_val_score
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, f1_score, precision_score, recall_score
+from imblearn.under_sampling import RandomUnderSampler
 import random
 
 from sklearn.ensemble import RandomForestClassifier
@@ -15,6 +16,7 @@ import xgboost as xgb
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from sklearn.linear_model import LogisticRegression
 
 from modules.constants import local_paths
 import os
@@ -28,76 +30,43 @@ class PredBase:
     returns_df: pd.DataFrame, 
     bet_type: str = 'umaren', 
     threshold: float = None, 
-    stochastic_variation: bool = True
+    stochastic_variation: bool = True,
+    train = True
   ):
     
     self.returns_df = returns_df  # 払戻データの初期化
     self.bet_type = bet_type  # 賭け方の初期化
     self.threshold = threshold  # 閾値の初期化
     self.stochastic_variation = stochastic_variation  # 確率による賭け金額の調整の有無
+    self.train = train  # インスタンス時の訓練の有無
 
-  def process_missing_values(self, df):
-    df_p = df.copy()
-    """欠損値の補完"""
-    # 数値カラムを選択
-    num_cols = df_p.select_dtypes(include=['int64', 'float64']).columns
-    # カテゴリカラムを選択
-    cat_cols = df_p.select_dtypes(include=['object']).columns
 
-    # 数値カラムの欠損値を平均値で補完
-    for col in num_cols:
-        df_p[col] = df_p[col].fillna(df_p[col].mean())
-    # カテゴリカラムの欠損値を最頻値で補完
-    for col in cat_cols:
-      df_p[col] = df_p[col].fillna(df_p[col].mode().iloc[0])
 
-    return df_p
+  def preprocess_df(self, df):
+    df_d = df.dropna().copy()
+    
+    # 対象のカラム
+    columns_to_encode = ['horse_id', 'jockey_id', 'trainer_id', 'owner_id']
+
+    # 各カラムごとにLabelEncoderを適用
+    for column in columns_to_encode:
+      le = LabelEncoder()  # LabelEncoderのインスタンスを作成
+      df_d[column] = le.fit_transform(df_d[column])  # カラムにエンコードを適用
+
+    return df_d
   
-
-  def preprocess_df(self, df, train=False):
-    df_copy = df.copy()
-
-    if train:
-      if self.bet_type in ['umaren', 'umatan']:
-        df_copy['target'] = df_copy['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
-      elif self.bet_type in ['sanrenpuku','sanrentan']:
-        df_copy['target'] = df_copy['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
-      else:
-        raise RuntimeError(f"{self.bet_type} is not supported.")
-    
-    # 欠損値の補完
-    df_p = self.process_missing_values(df_copy)
-    df_p_copy = df_p.copy()
-
-    # カウントエンコーディング
-    count_enc = ce.CountEncoder(cols=['date'])
-    df_ce = count_enc.fit_transform(df_p_copy[['date']])
-    
-    # ラベルエンコーディング
-    df_le = pd.DataFrame()
-    for col in ['horse_id', 'jockey_id', 'trainer_id', 'owner_id']:
-      le = LabelEncoder()
-      df_le[col] = le.fit_transform(df_p_copy[col])
-
-
-    # 元のデータフレームにエンコードされた列を追加
-    df_p_encoded = df_p_copy.reset_index(drop=True).join(
-      pd.concat([df_ce.reset_index(drop=True), df_le.reset_index(drop=True)], axis=1), rsuffix='_encoded'
-    )
-
-    return df_p_encoded.loc[:, ~df_p_encoded.columns.duplicated()]
-
   
 
   def drop_columns(self, df):
     df_p = df.copy()
 
-    self.drop_features = ['race_id', 'rank', 'horse_id', 'jockey_id', 'trainer_id', 'owner_id', 'date', 'reference_date']
-
+    self.drop_features = [
+      'race_id', 'rank', 'win_odds', 'popularity', 'date', 'reference_date'
+    ]
     # 予測に不要なカラムを削除
-    df_p = df_p.drop(self.drop_features, axis=1, errors='ignore')
+    df_d = df_p.drop(self.drop_features, axis=1, errors='ignore')
 
-    return df_p
+    return df_d
 
   
   
@@ -161,6 +130,8 @@ class PredBase:
     else:
       df_add_returns.loc[race_group.index, 'returns'] = 0
 
+    df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= 1000]
+
     return df_add_returns
   
 
@@ -169,7 +140,9 @@ class PredBase:
     """予測に基づく払戻額を計算し、賭け金額を追加"""
     df = self.predict_target(pred_df)
 
-    df = df.loc[df['predicted_target'] == 1, ['race_id', 'number', 'rank', 'predicted_target', 'predicted_proba']]
+    df = df.loc[df['predicted_target'] == 1, ['race_id', 'number', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
+
+    #df = df[df['win_odds'] >= 5]
 
     df_add_returns = df.merge(self.returns_df, on='race_id', how='left')
     df_add_returns['returns'] = 0
@@ -180,7 +153,6 @@ class PredBase:
       predict_num = race_group['predicted_target'].sum()
       combinations = []  # 組み合わせを初期化
         
-
       if self.bet_type in ['umaren', 'umatan']:
         predict_min = 2
 
@@ -203,6 +175,7 @@ class PredBase:
     return df_add_returns[['race_id', 'returns', 'bet_sum']].drop_duplicates()
   
 
+
   def calc_returns_rate(self, pred_df):
     df_add_returns = self.returns_against_pred_bet(pred_df)
     df = df_add_returns.dropna(subset=['returns']).reset_index(drop=True)
@@ -215,6 +188,7 @@ class PredBase:
     return df
 
 
+
   def plot_returns_rate(self, pred_df):
     """回収率を計算し、グラフを生成"""
     df = self.calc_returns_rate(pred_df)
@@ -222,7 +196,6 @@ class PredBase:
     # 賭けた回数と払い戻しの総額を計算
     betting_count = len(df)
     total_returns = df['returns'].sum()
-
 
     # 日本語フォントの設定
     plt.rcParams['font.family'] = 'MS Gothic'
@@ -246,6 +219,7 @@ class PredBase:
     return df
   
 
+
 class RFModel(PredBase):
   def __init__(
     self, 
@@ -253,25 +227,32 @@ class RFModel(PredBase):
     returns_df: pd.DataFrame | None, 
     bet_type='umaren', 
     threshold=None, 
-    random_: bool = False,
     stochastic_variation=True,
+    train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
     self.model_type = 'rf'
     self.df = train_df
-    self.random_ = random_
-    self.model = model if model else self.model_train()
+    self.model = model if model or not self.train else self.model_train()
   
+
 
   def model_train(self):
     """訓練データを使ってモデルをトレーニング"""
     df = self.df.copy()
-    
+
+    if self.bet_type in ['umaren', 'umatan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
+    elif self.bet_type in ['sanrenpuku','sanrentan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
+    else:
+      raise RuntimeError(f"{self.bet_type} is not supported.")  
+
     # targetの設定とラベルエンコーディング、不要なカラムの処理
-    df_p = self.preprocess_df(df, train=True)
+    df_p = self.preprocess_df(df)
     df_d = self.drop_columns(df_p)
 
     # データ分割
@@ -279,20 +260,16 @@ class RFModel(PredBase):
     y = df_d['target']
 
     # データ分割
-    # 1から100の間のランダムな整数を取得
-    if self.random_:
-      random_value = random.randint(1, 100)
-    else:
-      random_value = 42
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_value if random_value else 42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # オーバーサンプリング
-    smote = SMOTE(random_state=random_value)
-    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+    # ランダムアンダーサンプリング
+    rus = RandomUnderSampler(random_state=42)
+    X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # ランダムフォレストモデルのトレーニング
     model = RandomForestClassifier(random_state=42)
-    model.fit(X_train_smote, y_train_smote)
+    model.fit(X_train_res, y_train_res)
+
     if self.threshold is not None:
       y_pred_proba = model.predict_proba(X_test)[:, 1]  # 予測確率を取得
       y_pred = (y_pred_proba >= self.threshold).astype(int)
@@ -310,10 +287,14 @@ class RFModel(PredBase):
       'feature': X.columns,
       'importance': model.feature_importances_
     }).sort_values('importance', ascending=False)
-    print("Feature Importance:\n", feature_importance.head(20))
+    print("Feature Importance:\n", feature_importance.head(30))
+
+    self.model = model
+    
 
     return model
   
+
 
   def predict_target(self, pred_df):
     """予測結果を生成"""
@@ -323,7 +304,6 @@ class RFModel(PredBase):
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
     df_x = self.drop_columns(df_p)
-    
 
     # 閾値の有無
     if self.threshold is not None:
@@ -335,13 +315,13 @@ class RFModel(PredBase):
     else:
       predicted_target = self.model.predict(df_x)
 
-
     # 元の pred_df に予測結果を追加
     df_p['predicted_proba'] = self.model.predict_proba(df_x)[:, 1]
     df_p['predicted_target'] = predicted_target
 
     return df_p
   
+
 
 # PyTorchのニューラルネットワークを使った予測クラス
 class NNModel(PredBase):
@@ -351,49 +331,49 @@ class NNModel(PredBase):
     returns_df: pd.DataFrame | None, 
     bet_type: str = 'umaren', 
     threshold: float = None,
-    random_: bool = False,
     stochastic_variation: bool = True,
-    embedding_dim: int = 10,
+    train = True,
     model=None
   ):
       
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
     self.model_type = 'nn'
-    self.random_ = random_
     self.scaler = StandardScaler()
-    if model:
+    if model or not self.train:
       self.model = model
     else:
       self.df = train_df
-      self.embedding_dim = embedding_dim
       self.model = self.model_train()
 
 
   def model_train(self):
     df = self.df.copy()
+
+    if self.bet_type in ['umaren', 'umatan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
+    elif self.bet_type in ['sanrenpuku','sanrentan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
+    else:
+      raise RuntimeError(f"{self.bet_type} is not supported.")
     
     # targetの設定とラベルエンコーディング、不要なカラムの処理
-    df = self.preprocess_df(df, train=True)
-    df_p = self.drop_columns(df)
+    df_p = self.preprocess_df(df)
+    df_d = self.drop_columns(df_p)
 
-    X = df_p.drop(['target'], axis=1)
-    y = df_p['target']
+    X = df_d.drop(['target'], axis=1)
+    y = df_d['target']
 
     # データ正規化 (標準化)
     self.scaler.fit(X)
     X_scaled = self.scaler.transform(X)
     X_scaled = pd.DataFrame(X_scaled, columns=X.columns)
 
-    # データ分割 (ID列と数値列を分割する)
-    if self.random_:
-      random_value = random.randint(1, 100)
-    else:
-      random_value = 42
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=random_value)
+    # データ分割 
+    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
-    # 数値データのみにSMOTEを適用
-    smote = SMOTE(random_state=random_value)
-    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+    # ランダムアンダーサンプリング
+    rus = RandomUnderSampler(random_state=42)
+    X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
 
     class Net(nn.Module):
       def __init__(self, input_size):
@@ -414,7 +394,7 @@ class NNModel(PredBase):
         return x
 
     # モデルのインスタンス作成 (入力サイズはID列と数値列の合計)
-    input_size = X_train_smote.shape[1]
+    input_size = X_train_res.shape[1]
     model = Net(input_size=input_size)
 
     # トレーニング
@@ -422,8 +402,8 @@ class NNModel(PredBase):
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     # PyTorchテンソルに変換
-    X_train_tensor = torch.tensor(X_train_smote.values, dtype=torch.float32)
-    y_train_tensor = torch.tensor(y_train_smote.values, dtype=torch.float32)
+    X_train_tensor = torch.tensor(X_train_res.values, dtype=torch.float32)
+    y_train_tensor = torch.tensor(y_train_res.values, dtype=torch.float32)
 
     # 訓練ループ
     for epoch in range(100):
@@ -449,8 +429,11 @@ class NNModel(PredBase):
     self.accuracy = accuracy_score(y_test, y_pred)
     print("Accuracy:", self.accuracy)
 
+    self.model = model
+
     return model
     
+
 
   def predict_target(self, pred_df):
     """予測結果を生成"""
@@ -493,45 +476,48 @@ class LGBModel(PredBase):
     returns_df: pd.DataFrame | None, 
     bet_type='umaren', 
     threshold=None, 
-    random_: bool = False,
-    stochastic_variation=True, 
+    stochastic_variation=True,
+    train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
     self.model_type = 'lgb'
     self.df = train_df
-    self.random_ = random_
-    self.model = model if model else self.model_train()
+    self.model = model if model or not self.train else self.model_train()
+
 
   
   def model_train(self):
     """訓練データを使ってモデルをトレーニング"""
     df = self.df.copy()
 
+    if self.bet_type in ['umaren', 'umatan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
+    elif self.bet_type in ['sanrenpuku','sanrentan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
+    else:
+      raise RuntimeError(f"{self.bet_type} is not supported.")  
+
+
     # targetの設定とラベルエンコーディング、不要なカラムの処理
-    df = self.preprocess_df(df, train=True)
-    df_p = self.drop_columns(df)
+    df_p = self.preprocess_df(df)
+    df_d = self.drop_columns(df_p)
 
     # データ分割
-    X = df_p.drop(['target'], axis=1)
-    y = df_p['target']
+    X = df_d.drop(['target'], axis=1)
+    y = df_d['target']
 
     # データ分割
-    if self.random_ :
-      # 1から100の間のランダムな整数を取得
-      random_value = random.randint(1, 100)
-    else:
-      random_value = 42
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_value)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # オーバーサンプリング
-    smote = SMOTE(random_state=random_value)
-    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+    # ランダムアンダーサンプリング
+    rus = RandomUnderSampler(random_state=42)
+    X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # LightGBMモデルのトレーニング
-    train_data = lgb.Dataset(X_train_smote, label=y_train_smote)
+    train_data = lgb.Dataset(X_train_res, label=y_train_res)
     params = {'objective': 'binary','metric': 'auc', 'boosting_type': 'gbdt', 'num_leaves': 31, 'learning_rate': 0.05}
     model = lgb.train(params, train_data, num_boost_round=100)
     y_pred_proba = model.predict(X_test)  # 予測確率を取得
@@ -548,9 +534,12 @@ class LGBModel(PredBase):
       'feature': X.columns,
       'importance': model.feature_importance()
     }).sort_values('importance', ascending=False)
-    print("Feature Importance:\n", feature_importance.head(20))
+    print("Feature Importance:\n", feature_importance.head(30))
+
+    self.model = model
 
     return model
+  
   
 
   def predict_target(self, pred_df):
@@ -572,6 +561,7 @@ class LGBModel(PredBase):
     return df_p
 		
 
+
 class XGBModel(PredBase):
   def __init__(
     self, 
@@ -579,45 +569,47 @@ class XGBModel(PredBase):
     returns_df: pd.DataFrame | None, 
     bet_type='umaren', 
     threshold=None, 
-    random_: bool = False,
     stochastic_variation=True, 
+    train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
     self.model_type = 'xgb'
     self.df = train_df
-    self.random_ = random_
-    self.model = model if model else self.model_train()
+    self.model = model if model or not self.train else self.model_train()
   
 
   def model_train(self):
     """訓練データを使ってモデルをトレーニング"""
     df = self.df.copy()
+
+    if self.bet_type in ['umaren', 'umatan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
+    elif self.bet_type in ['sanrenpuku','sanrentan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
+    else:
+      raise RuntimeError(f"{self.bet_type} is not supported.")
     
     # targetの設定とラベルエンコーディング、不要なカラムの処理
-    df = self.preprocess_df(df, train=True)
-    df_p = self.drop_columns(df)
+    df_p = self.preprocess_df(df)
+    df_d = self.drop_columns(df_p)
 
     # データ分割
-    X = df_p.drop(['target'], axis=1)
-    y = df_p['target']
+    X = df_d.drop(['target'], axis=1)
+    y = df_d['target']
 
     # データ分割
-    if self.random_:
-      random_value = random.randint(1, 100)
-    else:
-      random_value = 42
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=random_value)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
-    # オーバーサンプリング
-    smote = SMOTE(random_state=random_value)
-    X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
+    # ランダムアンダーサンプリング
+    rus = RandomUnderSampler(random_state=42)
+    X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # XGBoostモデルのトレーニング
     model = xgb.XGBClassifier(objective='binary:logistic', max_depth=6, learning_rate=0.1, n_estimators=100, n_jobs=-1)
-    model.fit(X_train_smote, y_train_smote)
+    model.fit(X_train_res, y_train_res)
 
     if self.threshold is not None:
       y_pred_proba = model.predict_proba(X_test)[:, 1]  # 予測確率を取得
@@ -636,7 +628,9 @@ class XGBModel(PredBase):
       'feature': X.columns,
       'importance': model.feature_importances_
     }).sort_values('importance', ascending=False)
-    print("Feature Importance:\n", feature_importance.head(20))
+    print("Feature Importance:\n", feature_importance.head(30))
+
+    self.model = model
 
     return model
   
@@ -661,7 +655,6 @@ class XGBModel(PredBase):
     else:
       predicted_target = self.model.predict(df_x)
 
-
     # 元の pred_df に予測結果を追加
     df_p['predicted_proba'] = self.model.predict_proba(df_x)[:, 1]
     df_p['predicted_target'] = predicted_target
@@ -681,195 +674,144 @@ class EnsembleModel(PredBase):
     super().__init__(returns_df, bet_type, threshold, stochastic_variation)
     self.model_type = 'ensemble'
     self.df = train_df
-    self.models_dict, self.models_dict_0, self.models_dict_1, self.top_2_keys, self.top_1_keys = self.model_train()
+    self.base_models, self.meta_models = self.model_train()
 
-  def model_list(self, df_t, random_, model, return_model):
-    if return_model == 'rf':
-      rf = RFModel(
-        train_df=df_t, 
-        returns_df=self.returns_df,
-        bet_type=self.bet_type,
-        threshold=self.threshold,
-        random_=random_,
-        stochastic_variation=self.stochastic_variation,
-        model=model if model else None
+
+
+  def models_instance(self, df, model_type, model=None):
+    """モデルのインスタンスを作成"""
+    if model_type == 'rf':
+      model = RFModel(
+        train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True, 
+        model=model
       )
-      return rf
-    elif return_model == 'nn':
-      nn = NNModel(
-        train_df=df_t, 
-        returns_df=self.returns_df, 
-        bet_type=self.bet_type, 
-        threshold=self.threshold, 
-        random_=random_,
-        stochastic_variation=self.stochastic_variation,
-        model=model if model else None
+    elif model_type == 'nn':
+      model = NNModel(
+        train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True,
+        model=model
       )
-      return nn
-    elif return_model == 'lgb':
-      lgb = LGBModel(
-        train_df=df_t, 
-        returns_df=self.returns_df, 
-        bet_type=self.bet_type, 
-        threshold=self.threshold, 
-        random_=random_,
-        stochastic_variation=self.stochastic_variation,
-        model=model if model else None
+    elif model_type == 'lgb':
+      model = LGBModel(
+        train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True,
+        model=model
       )
-      return lgb
-    elif return_model == 'xgb':
-      xgb = XGBModel(
-        train_df=df_t, 
-        returns_df=self.returns_df, 
-        bet_type=self.bet_type, 
-        threshold=self.threshold, 
-        random_=random_,
-        stochastic_variation=self.stochastic_variation,
-        model=model if model else None
+    elif model_type == 'xgb':
+      model = XGBModel(
+        train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True,
+        model=model
       )
-      return xgb
-    
 
-  def ensembled_model_df(
-      self,
-      pred_df=None, 
-      models_dict=None,
-      models_dict_0=None,
-      models_dict_1=None, 
-      top_2_keys=None, 
-      top_1_keys=None, 
-      output_model=False, 
-      output_predicted_df=False
-    ):
-    
-    if self.df is not None:
-      df = self.df.copy()
-      df_p = self.preprocess_df(df)
+    return model
 
-    if pred_df is not None:
-      df = pred_df.copy()
-      df_p = self.preprocess_df(df)
 
-    model_reps = {}
-
-    if models_dict is None:
-      models_dict = {}
-    else:
-      models_dict = self.models_dict
-
-    pred_base = pd.DataFrame()
-    for i in range(2):
-      # モデルの取得、トレーニングまたは予測
-      rf = self.model_list(df, random_=True, model=(models_dict.get(f'rf_{i}')), return_model='rf')
-      nn = self.model_list(df, random_=True, model=(models_dict.get(f'nn_{i}')), return_model='nn')
-      lgb = self.model_list(df, random_=True, model=(models_dict.get(f'lgb_{i}')), return_model='lgb')
-      xgb = self.model_list(df, random_=True, model=(models_dict.get(f'xgb_{i}')), return_model='xgb')
-      
-      if pred_df is None: 
-        models_dict[f'rf_{i}'] = rf.model
-        models_dict[f'nn_{i}'] = nn.model
-        models_dict[f'lgb_{i}'] = lgb.model
-        models_dict[f'xgb_{i}'] = xgb.model  
-
-        model_reps[f'rf_{i}'] = rf.accuracy
-        model_reps[f'nn_{i}'] = nn.accuracy
-        model_reps[f'lgb_{i}'] = lgb.accuracy
-        model_reps[f'xgb_{i}'] = xgb.accuracy
-
-      # 予測結果の作成
-      rf_pred = rf.predict_target(df)[['predicted_proba', 'predicted_target']].reset_index(drop=True)\
-        .rename(columns={'predicted_proba': f'predicted_proba_rf{i}', 'predicted_target': f'predicted_target_rf{i}'})
-      nn_pred = nn.predict_target(df)[['predicted_proba', 'predicted_target']].reset_index(drop=True)\
-        .rename(columns={'predicted_proba': f'predicted_proba_nn{i}', 'predicted_target': f'predicted_target_nn{i}'})
-      lgb_pred = lgb.predict_target(df)[['predicted_proba', 'predicted_target']].reset_index(drop=True)\
-        .rename(columns={'predicted_proba': f'predicted_proba_lgb{i}', 'predicted_target': f'predicted_target_lgb{i}'})
-      xgb_pred = xgb.predict_target(df)[['predicted_proba', 'predicted_target']].reset_index(drop=True)\
-        .rename(columns={'predicted_proba': f'predicted_proba_xgb{i}', 'predicted_target': f'predicted_target_xgb{i}'})
-
-      pred_base = pd.concat([pred_base, rf_pred, nn_pred, lgb_pred, xgb_pred], axis=1)
-    
-    df = pd.concat([df, pred_base], axis=1)
-
-    if top_2_keys is None:
-      top_2_keys = sorted(model_reps, key=model_reps.get, reverse=True)[:2]
-    else:
-      top_2_keys = self.top_2_keys
-
-    # layer 0
-    model_reps_0 = {}
-
-    if models_dict_0 is None:
-      models_dict_0 = {}
-    else:
-      models_dict_0 = self.models_dict_0
-
-    pred_base = pd.DataFrame()
-    for i, top_2_key in enumerate(top_2_keys[:2]):
-      model_type = top_2_key.split('_')[0]
-      # 予想結果を含めたデータ(df)で学習してモデルを取得（訓練時） or モデルの取得（予測時）
-      m = self.model_list(df, random_=True, model=models_dict_0.get(top_2_key), return_model=model_type)
-      if pred_df is None: 
-        models_dict_0[f'{model_type}_{i}'] = m.model
-        model_reps_0[f'{model_type}_{i}'] = m.accuracy
-      pred = m.predict_target(df)[['predicted_proba', 'predicted_target']].reset_index(drop=True)\
-        .rename(columns={'predicted_proba': f'predicted_proba_{model_type}_0{i}', 'predicted_target': f'predicted_target_{model_type}_0{i}'})
-      pred_base = pd.concat([pred_base, pred], axis=1)
-
-    df = pd.concat([df, pred_base], axis=1)
-
-    if top_1_keys is None:
-      top_1_keys = sorted(model_reps_0, key=model_reps_0.get, reverse=True)[:1]
-    else:
-      top_1_keys = self.top_1_keys
-
-    # layer 1
-    if models_dict_1 is None:
-      models_dict_1 = {}
-    else:
-      models_dict_1 = self.models_dict_1
-
-    for i, top_1_key in enumerate(top_1_keys[:1]):
-      model_type = top_1_key.split('_')[0]
-      m = self.model_list(df, random_=True, model=models_dict_1.get(top_1_key), return_model=model_type)
-      # 予想結果を含めたデータ(df)で学習（訓練時） or モデルの取得（予測時）
-      if pred_df is None: 
-        models_dict_1[f'{model_type}_{i}'] = m.model
-      pred = m.predict_target(df)[['predicted_proba', 'predicted_target']].reset_index(drop=True)
-
-    df_p = pd.concat([df_p, pred], axis=1)
-
-    if output_model and not output_predicted_df:
-      return models_dict, models_dict_0, models_dict_1, top_2_keys, top_1_keys
-    
-    elif output_predicted_df:
-      return df_p
-
-    
 
   def model_train(self):
     """モデルの学習"""
-    print("\n\nモデルの学習\n\n")
+    print("\n training... \n\n")
 
-    return self.ensembled_model_df(
-      pred_df=None, models_dict=None, models_dict_0=None, models_dict_1=None,
-      top_2_keys= None, top_1_keys= None, output_model= True, output_predicted_df= False
-    )
+    df = self.df.copy()
 
-  
+    if self.bet_type in ['umaren', 'umatan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 2 else 0)  # 馬連、馬単
+    elif self.bet_type in ['sanrenpuku','sanrentan']:
+      df['target'] = df['rank'].apply(lambda x: 1 if x <= 3 else 0)  # 三連複、三連単
+    else:
+      raise RuntimeError(f"{self.bet_type} is not supported.")  
+    
+    # とラベルエンコーディング、欠損値の処理
+    df_p = self.preprocess_df(df)
+
+    # データ分割
+    X = df_p.drop(['target'], axis=1)
+    y = df_p['target']
+
+    # データ分割
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    base_models = {}
+    meta_models = {}
+
+    # 学習
+    X_train = X_train.reset_index(drop=True)
+    meta_train = X_train.copy()
+
+    # k-fold
+    kf = KFold(n_splits=5)
+    for train_idx, val_idx in kf.split(X_train):
+      X_train_kf, X_val_kf = X_train.iloc[train_idx], X_train.iloc[val_idx]
+
+      for model_type in ['rf', 'nn', 'lgb', 'xgb']:
+        model = self.models_instance(X_train_kf, model_type, model=None)
+        val_pred = model.predict_target(X_val_kf)
+        base_models[model_type] = model.model
+
+        meta_train.loc[val_idx, f'predicted_proba_{model_type}'] = val_pred['predicted_proba']
+        meta_train.loc[val_idx, f'predicted_target_{model_type}'] = val_pred['predicted_target']
+
+    meta_model = self.models_instance(meta_train, 'lgb', model=None)
+    meta_models['lgb'] = meta_model.model
+
+    # テストデータで予測
+    X_test = X_test.reset_index(drop=True)
+    meta_test = X_test.copy()
+
+    for key, base_model in base_models.items():
+      meta_model = self.models_instance(X_test, key, model=base_model)
+      test_pred = meta_model.predict_target(X_test)
+      meta_test[f'predicted_proba_{key}'] = test_pred['predicted_proba']
+      meta_test[f'predicted_target_{key}'] = test_pred['predicted_target']
+
+    meta_model = self.models_instance(meta_test, 'lgb', model=meta_models['lgb'])
+    pred = meta_model.predict_target(meta_test)['predicted_target']
+
+
+    # 評価指標を計算
+    accuracy = accuracy_score(y_test, pred)
+    f1 = f1_score(y_test, pred)
+    precision = precision_score(y_test, pred)
+    recall = recall_score(y_test, pred)
+
+    # 結果を表示
+    print(f"Accuracy: {accuracy:.4f}")
+    print(f"F1 Score: {f1:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+
+    # 追加で混同行列も表示
+    conf_matrix = confusion_matrix(y_test, pred)
+    print(f"Confusion Matrix:\n{conf_matrix}")
+
+    return base_models, meta_models
+        
+
+
   def predict_target(self, pred_df):
-    """予測結果を生成"""
-    print("\n\nモデルの予測\n\n")
-    # pred_dfをコピーして予測用に加工
+    """
+    予測対象データに対する予測結果を返す関数
+    """
     df = pred_df.copy()
 
-    return self.ensembled_model_df(
-      pred_df=df, models_dict=self.models_dict, models_dict_0=self.models_dict_0, models_dict_1=self.models_dict_1,
-      top_2_keys=self.top_2_keys, top_1_keys=self.top_1_keys, output_model=False, output_predicted_df=True
-    )
+    # targetの設定とラベルエンコーディング、不要なカラムの処理
+    df_p = self.preprocess_df(df)
 
+    meta_data = df_p.copy()
 
+    # ベースモデルの予測
+    for key, base_model in self.base_models.items():
+      meta_model = self.models_instance(df_p, key, model=base_model)
+      test_pred = meta_model.predict_target(df_p)
+      meta_data[f'predicted_proba_{key}'] = test_pred['predicted_proba']
+      meta_data[f'predicted_target_{key}'] = test_pred['predicted_target']
 
-
+    # メタモデルの予測
+    meta_model = self.models_instance(meta_data, 'lgb', model=self.meta_models['lgb'])
+    meta_pred = meta_model.predict_target(meta_data)
+    
+    return meta_pred
 
     
       
