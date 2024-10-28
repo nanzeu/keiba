@@ -4,7 +4,6 @@ import json
 import re
 import numpy as np
 from tqdm import tqdm
-from sklearn.preprocessing import LabelEncoder
 
 from modules.constants import local_paths, master
 
@@ -44,6 +43,9 @@ def process_results(
   df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t")
 
   # データを加工
+  df['jockey_id'] = df['jockey_id'].astype(str).str.zfill(5)
+  df['trainer_id'] = df['trainer_id'].astype(str).str.zfill(5)
+  df['owner_id'] = df['owner_id'].astype(str).str.zfill(6)
   df['rank'] = pd.to_numeric(df['着順'], errors="coerce") 
   df.dropna(subset=['rank'], inplace=True)
   df['frame'] = df['枠番'].astype(int)
@@ -121,9 +123,13 @@ def process_horse_results(
     if pd.isna(time):
       time_list.append(np.nan)
       continue
-    times = str(time).split(':')
-    total_seconds = int(times[0]) * 60 + float(times[1])
-    time_list.append(total_seconds)
+    else:
+      try:
+        times = str(time).split(':')
+        total_seconds = int(times[0]) * 60 + float(times[1])
+        time_list.append(total_seconds)
+      except:
+        time_list.append(np.nan)
   df['time'] = time_list
 
   # 必要なカラム
@@ -256,6 +262,7 @@ def process_returns(
   return concat_df
 
 
+
 def process_peds(
     input_dir: str = local_paths.RAW_DIR,
     output_dir: str = local_paths.PREPROCESSED_DIR,
@@ -269,24 +276,87 @@ def process_peds(
 
   # horse_idごとにデータを集約
   for horse_id, group in tqdm(df.groupby('horse_id')):
-      # 親の情報を取得
-      parents = group['0'].tolist()  
-      parents = list(dict.fromkeys(parents))  # 親の重複を排除
-      grandparents = group['1'].tolist()  # 祖父母
-      
-      # horse_idに親と祖父母を対応させる辞書を作成
-      horse_parents_dict[horse_id] = {
-          'parent_0': parents[0] if len(parents) > 0 else None,
-          'parent_1': parents[1] if len(parents) > 1 else None,
-          'parent_2': grandparents[0] if len(grandparents) > 0 else None,
-          'parent_3': grandparents[1] if len(grandparents) > 1 else None,
-          'parent_4': grandparents[2] if len(grandparents) > 2 else None,
-          'parent_5': grandparents[3] if len(grandparents) > 3 else None,
-      }
+    # 親の情報を取得
+    parents = group['0'].tolist()  
+    parents = list(dict.fromkeys(parents))  # 親の重複を排除
+    grandparents = group['1'].tolist()  # 祖父母
+    
+    # horse_idに親と祖父母を対応させる辞書を作成
+    horse_parents_dict[horse_id] = {
+      'parent_0': parents[0] if len(parents) > 0 else None,
+      'parent_1': parents[1] if len(parents) > 1 else None,
+      'parent_2': grandparents[0] if len(grandparents) > 0 else None,
+      'parent_3': grandparents[1] if len(grandparents) > 1 else None,
+      'parent_4': grandparents[2] if len(grandparents) > 2 else None,
+      'parent_5': grandparents[3] if len(grandparents) > 3 else None,
+    }
 
   # 辞書からデータフレームに変換
   concat_df = pd.DataFrame.from_dict(horse_parents_dict, orient='index')
 
   concat_df.index.name = 'horse_id'
   concat_df.to_csv(os.path.join(output_dir, save_file_name), sep="\t")
-  return concat_df
+  return 
+
+
+
+def process_jockeys(
+    input_dir: str = local_paths.RAW_DIR,
+    output_dir: str = local_paths.PREPROCESSED_DIR,
+    save_file_name: str = "jockeys.csv",
+) -> pd.DataFrame:
+  
+  df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t", dtype={'jockey_id': str})
+
+  df = df.dropna()
+
+  df = df[df['年度'] != '累計']
+
+  df.loc[:, 'annual'] = df['年度'].astype(int)
+  df.loc[:, 'jockey_rank'] = df['順位'].astype(int)
+  df.loc[:, 'jockey_n_top_1'] = df['1着'].astype(int)
+  df.loc[:, 'jockey_n_top_2'] = df['2着'].astype(int)
+  df.loc[:, 'jockey_n_top_3'] = df['3着'].astype(int)
+  df.loc[:, 'jockey_n_4th_or_below'] = df['着外'].astype(int)
+  df.loc[:, 'jockey_stakes_participation'] = df['重賞'].astype(int)
+  df.loc[:, 'jockey_stakes_win'] = df['重賞_勝利'].astype(int)
+  df.loc[:, 'jockey_special_participation'] = df['特別'].astype(int)
+  df.loc[:, 'jockey_special_win'] = df['特別_勝利'].astype(int)
+  df.loc[:, 'jockey_flat_participation'] = df['平場'].astype(int)
+  df.loc[:, 'jockey_lawn_participation'] = df['芝'].astype(int)
+  df.loc[:, 'jockey_lawn_win'] = df['芝_勝利'].astype(int)
+  df.loc[:, 'jockey_dirt_participation'] = df['ダート'].astype(int)
+  df.loc[:, 'jockey_dirt_win'] = df['ダート_勝利'].astype(int)
+  df.loc[:, 'jockey_win_proba'] = df['勝率'].astype(int)
+  df.loc[:, 'jockey_top_2_proba'] = df['連対 率'].astype(float)
+  df.loc[:, 'jockey_top_3_proba'] = df['複勝 率'].astype(float)
+  df.loc[:, 'jockey_earned_prize'] = df['収得賞金 (万円)'].astype(float)
+
+  df = df[
+    [
+    'annual',
+    'jockey_id',
+    'jockey_rank',
+    'jockey_n_top_1',
+    'jockey_n_top_2',
+    'jockey_n_top_3',
+    'jockey_n_4th_or_below',
+    'jockey_stakes_participation',
+    'jockey_stakes_win',
+    'jockey_special_participation',
+    'jockey_special_win',
+    'jockey_flat_participation',
+    'jockey_lawn_participation',
+    'jockey_lawn_win',
+    'jockey_dirt_participation',
+    'jockey_dirt_win',
+    'jockey_win_proba',
+    'jockey_top_2_proba',
+    'jockey_top_3_proba',
+    'jockey_earned_prize',
+    ]
+  ]
+
+      
+  df.to_csv(os.path.join(output_dir, save_file_name), sep="\t")
+  return df

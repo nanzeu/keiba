@@ -6,6 +6,9 @@ import urllib
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
+from concurrent.futures import ThreadPoolExecutor
+from urllib.error import URLError
+import threading
 
 from .constants import local_paths, master, url_paths  # ローカルモジュールのインポート
 
@@ -37,27 +40,133 @@ def get_html_race(race_id_list: list[str], save_dir: str = local_paths.HTML_RACE
   return html_path_list
 
 
+def download_single_horse(args: tuple) -> str:
+  """単一の馬のHTMLをダウンロードする関数"""
+  horse_id, save_dir, skip = args
+  filepath = os.path.join(save_dir, f"{horse_id}.bin")
+
+  # ファイルが存在する場合のチェック
+  if os.path.isfile(filepath) and skip:
+    return filepath
+
+  try:
+    url = os.path.join(url_paths.HORSE_URL, str(horse_id))
+    
+    # URLOpenのタイムアウトを設定
+    html = urllib.request.urlopen(url, timeout=10).read()
+    
+    # ファイルの書き込み
+    with open(filepath, "wb") as f:
+      f.write(html)
+        
+    # スリープはグローバルなレート制限に従う
+    time.sleep(1)
+    
+    return filepath
+  
+  except Exception as e:
+    print(f"Unexpected error for {horse_id}: {e}")
+    return None
+  
+
 def get_html_horse(
-      horse_id_list: list[str],
-      save_dir: str = local_paths.HTML_HORSE_DIR,
-      skip: bool = True) -> list[str]:
+  horse_id_list: list[str],
+  save_dir: str = local_paths.HTML_HORSE_DIR,
+  skip: bool = True,
+  max_workers: int = 4,
+  chunk_size: int = 1000
+) -> list[str]:
   """
-  horse_idはresultsの'horse_id'カラムから取得。
-  horse_idからhtmlを取得してsave_dirに保存する。戻り値はhtml_path_list
-  skip=Trueでファイルが存在する場合はスキップする。
+  horse_idからhtmlを取得して保存する関数（並列処理版）
+  
+  Parameters:
+      horse_id_list: 馬IDのリスト
+      save_dir: 保存先ディレクトリ
+      skip: 既存ファイルをスキップするかどうか
+      max_workers: 同時実行する最大スレッド数
+      chunk_size: 一度に処理するIDの数
+  """
+  
+  # 保存先ディレクトリの確認・作成
+  os.makedirs(save_dir, exist_ok=True)
+  
+  # グローバルなレート制限用のセマフォ
+  semaphore = threading.Semaphore(max_workers)
+  
+  def download_with_semaphore(args):
+    with semaphore:
+      return download_single_horse(args)
+  
+  html_path_list = []
+  
+  # チャンク単位で処理
+  for i in range(0, len(horse_id_list), chunk_size):
+    chunk_ids = horse_id_list[i:i + chunk_size]
+    
+    # 並列ダウンロードの実行
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+      args_list = [(horse_id, save_dir, skip) for horse_id in chunk_ids]
+      results = list(tqdm(
+        executor.map(download_with_semaphore, args_list),
+        total=len(chunk_ids),
+        desc=f"Downloading chunk {i//chunk_size + 1}/{len(horse_id_list)//chunk_size + 1}"
+      ))
+    
+    # 成功したダウンロードのパスを追加
+    html_path_list.extend([path for path in results if path is not None])
+    
+    # チャンク間で少し待機（サーバー負荷軽減）
+    time.sleep(2)
+  
+  return html_path_list
+
+
+
+def get_html_ped(horse_id_list: list, save_dir: str):
+  """
+  horse_idからhtmlを取得してsave_dirに保存する。
   """
   html_path_list = []
   for horse_id in tqdm(horse_id_list):
-    filepath = os.path.join(save_dir, f"{horse_id}.bin")
+    html_path = os.path.join(save_dir, horse_id + ".bin")
+    html_path_list.append(html_path)
+
+    if os.path.isfile(html_path):  # すでに存在するファイルならskipする
+        print("horse_id {} skipped".format(horse_id))
+        continue
+
+    url = url_paths.PED_URL + horse_id
+    html = urlopen(url).read()  # urlのhtml情報のスクレイピング
+
+    time.sleep(1)
+
+    with open(html_path, "wb") as f:
+        f.write(html)  # スクレイピングしたhtmlの保存（書き込み）
+
+  return html_path_list
+
+
+
+def get_html_jockey(
+    jockey_id_list: list, 
+    save_dir: str = local_paths.HTML_JOCKEY_DIR, 
+    skip: bool = True
+  ) -> list[str]:
+  """
+  jockey_idからhtmlを取得してsave_dirに保存する。
+  """
+  html_path_list = []
+  for jockey_id in tqdm(jockey_id_list):
+    filepath = os.path.join(save_dir, f"{jockey_id}.bin")
     html_path_list.append(filepath)
 
     # もしすでに存在すればスキップ
     if os.path.isfile(filepath) and skip:
-      print(f"skipped: {horse_id}")
+      print(f"skipped: {jockey_id}")
 
     else:
       try:
-        url =  os.path.join(url_paths.HORSE_URL, str(horse_id))
+        url =  os.path.join(url_paths.JOCKEY_URL, str(jockey_id))
         html = urlopen(url).read()
         time.sleep(1)
         with open(filepath, "wb") as f:
@@ -68,30 +177,6 @@ def get_html_horse(
         continue
       
   return html_path_list
-
-
-def get_html_ped(horse_id_list: list, save_dir: str):
-    """
-    horse_idからhtmlを取得してsave_dirに保存する。
-    """
-    html_path_list = []
-    for horse_id in tqdm(horse_id_list):
-      html_path = os.path.join(save_dir, horse_id + ".bin")
-      html_path_list.append(html_path)
-
-      if os.path.isfile(html_path):  # すでに存在するファイルならskipする
-          print("horse_id {} skipped".format(horse_id))
-          continue
-
-      url = url_paths.PED_URL + horse_id
-      html = urlopen(url).read()  # urlのhtml情報のスクレイピング
-
-      time.sleep(1)
-
-      with open(html_path, "wb") as f:
-          f.write(html)  # スクレイピングしたhtmlの保存（書き込み）
-
-    return html_path_list
 
 
 # def get_rawdata_results(html_path_list: list):

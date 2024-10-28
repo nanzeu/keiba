@@ -24,6 +24,7 @@ import pickle
 import itertools
 
 
+
 class PredBase:
   def __init__(
     self,
@@ -31,6 +32,7 @@ class PredBase:
     bet_type: str = 'umaren', 
     threshold: float = None, 
     stochastic_variation: bool = True,
+    max_bet: int = 5000,
     train = True
   ):
     
@@ -38,6 +40,7 @@ class PredBase:
     self.bet_type = bet_type  # 賭け方の初期化
     self.threshold = threshold  # 閾値の初期化
     self.stochastic_variation = stochastic_variation  # 確率による賭け金額の調整の有無
+    self.max_bet = max_bet  # 1回あたりの最大賭け金額の初期化
     self.train = train  # インスタンス時の訓練の有無
 
 
@@ -77,7 +80,7 @@ class PredBase:
 
 
   def calc_bet_amount(self, group):
-    if self.stochastic_variation == True:
+    if self.stochastic_variation:
       # 確率に応じて賭け金額を調整
       for idx in group.index:
         proba = group.loc[idx, 'predicted_proba']
@@ -130,7 +133,7 @@ class PredBase:
     else:
       df_add_returns.loc[race_group.index, 'returns'] = 0
 
-    df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= 1000]
+    df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
 
     return df_add_returns
   
@@ -142,7 +145,7 @@ class PredBase:
 
     df = df.loc[df['predicted_target'] == 1, ['race_id', 'number', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
 
-    #df = df[df['win_odds'] >= 5]
+    #df = df[df['win_odds'] >= 2].reset_index(drop=True)
 
     df_add_returns = df.merge(self.returns_df, on='race_id', how='left')
     df_add_returns['returns'] = 0
@@ -203,9 +206,9 @@ class PredBase:
     # グラフの作成
     plt.figure(figsize=(6, 4), layout='constrained')
     plt.plot(df.index + 1, (df['returns_rate'] * 100), marker='.', color='b')
-    start_point = int(betting_count * 0.1)
-    plt.xlim([start_point, betting_count])
-    plt.xticks(np.arange(start_point, betting_count + 1, step=200))
+    # start_point = int(betting_count * 0.1)
+    # plt.xlim([start_point, betting_count])
+    # plt.xticks(np.arange(start_point, betting_count + 1, step=200))
     plt.title('賭けた回数と回収率の推移', fontsize=16)
     plt.xlabel('賭けた回数', fontsize=12)
     plt.ylabel('回収率 (%)', fontsize=12)
@@ -228,12 +231,13 @@ class RFModel(PredBase):
     bet_type='umaren', 
     threshold=None, 
     stochastic_variation=True,
+    max_bet: int = 5000,
     train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
     self.model_type = 'rf'
     self.df = train_df
     self.model = model if model or not self.train else self.model_train()
@@ -263,7 +267,7 @@ class RFModel(PredBase):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(random_state=42)
+    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # ランダムフォレストモデルのトレーニング
@@ -332,11 +336,12 @@ class NNModel(PredBase):
     bet_type: str = 'umaren', 
     threshold: float = None,
     stochastic_variation: bool = True,
+    max_bet: int = 5000,
     train = True,
     model=None
   ):
       
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
     self.model_type = 'nn'
     self.scaler = StandardScaler()
     if model or not self.train:
@@ -372,7 +377,7 @@ class NNModel(PredBase):
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(random_state=42)
+    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
 
     class Net(nn.Module):
@@ -477,12 +482,13 @@ class LGBModel(PredBase):
     bet_type='umaren', 
     threshold=None, 
     stochastic_variation=True,
+    max_bet: int = 5000,
     train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
     self.model_type = 'lgb'
     self.df = train_df
     self.model = model if model or not self.train else self.model_train()
@@ -513,7 +519,7 @@ class LGBModel(PredBase):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(random_state=42)
+    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # LightGBMモデルのトレーニング
@@ -570,12 +576,13 @@ class XGBModel(PredBase):
     bet_type='umaren', 
     threshold=None, 
     stochastic_variation=True, 
+    max_bet: int = 5000,
     train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
     self.model_type = 'xgb'
     self.df = train_df
     self.model = model if model or not self.train else self.model_train()
@@ -604,7 +611,7 @@ class XGBModel(PredBase):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(random_state=42)
+    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # XGBoostモデルのトレーニング
@@ -670,8 +677,9 @@ class EnsembleModel(PredBase):
     bet_type, 
     threshold=None, 
     stochastic_variation=True, 
+    max_bet: int = 5000
   ):
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet)
     self.model_type = 'ensemble'
     self.df = train_df
     self.base_models, self.meta_models = self.model_train()

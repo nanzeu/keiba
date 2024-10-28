@@ -3,6 +3,7 @@ from tqdm import tqdm
 import re
 from bs4 import BeautifulSoup
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from modules.constants import local_paths
 
@@ -36,6 +37,7 @@ def create_results(
         jockey_id_list = []
         for a in a_list:
           jockey_id = re.findall(r'\d{5}', a["href"])[0]
+          jockey_id = str(jockey_id).zfill(5)
           jockey_id_list.append(jockey_id)
         df["jockey_id"] = jockey_id_list
 
@@ -44,6 +46,7 @@ def create_results(
         trainer_id_list = []
         for a in a_list:
           trainer_id = re.findall(r'\d{5}', a["href"])[0]
+          trainer_id = str(trainer_id).zfill(5)
           trainer_id_list.append(trainer_id)
         df["trainer_id"] = trainer_id_list
 
@@ -52,6 +55,7 @@ def create_results(
         owner_id_list = []
         for a in a_list:
           owner_id = re.findall(r'\d{6}', a["href"])[0]
+          owner_id = str(owner_id).zfill(6)
           owner_id_list.append(owner_id)
         df["owner_id"] = owner_id_list
 
@@ -69,38 +73,51 @@ def create_results(
   return concat_df
 
 
-def create_horse_results(
-    html_paths_horse: list[str],
-    save_dir: str = local_paths.RAW_DIR,
-    save_filename: str = "horse_results.csv",
-  ) -> pd.DataFrame:
-  dfs = {}
-  for html_path in tqdm(html_paths_horse):
+def process_html_file(html_path: str) -> pd.DataFrame:
+  try:
     with open(html_path, "rb") as f:
-      try:
-        horse_id = re.search(r'\d{10}', html_path).group()
-        html = f.read()
-        df = pd.read_html(html)[3]
+      horse_id = re.search(r'\d{10}', html_path).group()
+      html = f.read()
+      df = pd.read_html(html)[3]
 
-        df.index = [horse_id] * len(df)
-        dfs[horse_id] = df
+      # horse_idの列を直接データフレームに追加
+      df['horse_id'] = horse_id
+      return df
+  except (IndexError, ValueError) as e:
+    print(f"table not found at {html_path}")
+    return None
 
-      except IndexError as e:
-        print(f"table not found at {horse_id}")
-        continue
+def create_horse_results(
+  html_paths_horse: list[str],
+  save_dir: str = local_paths.RAW_DIR,
+  save_filename: str = "horse_results.csv",
+  max_workers: int = 8  # スレッド数（またはプロセス数）
+) -> pd.DataFrame:
+  # 並列処理の設定
+  with ThreadPoolExecutor(max_workers=max_workers) as executor:
+      # プロセス関数を並列に実行し、結果をリストで取得
+      results = list(tqdm(executor.map(process_html_file, html_paths_horse), total=len(html_paths_horse)))
 
-  concat_df = pd.concat(dfs.values())
-  concat_df.index.name = "horse_id"
+  # Noneを除外してデータフレームを連結
+  dfs = [df for df in results if df is not None]
+  concat_df = pd.concat(dfs, ignore_index=True)
+
+  # 列名の空白を削除
   concat_df.columns = concat_df.columns.str.replace(' ', '')
-  concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
+  # horse_idをインデックスとして設定
+  concat_df.set_index('horse_id', inplace=True)
+  # 保存処理
+  concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t", index=False)
+
   return concat_df
 
 
+
 def create_race_info(
-    html_paths_race: list[str],
-    save_dir: str = local_paths.RAW_DIR,
-    save_filename: str = "race_info.csv",
-  ) -> pd.DataFrame:
+  html_paths_race: list[str],
+  save_dir: str = local_paths.RAW_DIR,
+  save_filename: str = "race_info.csv",
+) -> pd.DataFrame:
   dfs = {}
   for html_path in tqdm(html_paths_race):
     with open(html_path, "rb") as f:
@@ -129,11 +146,13 @@ def create_race_info(
   concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
   return concat_df
 
+
+
 def create_returns(
-    html_paths_race: list[str],
-    save_dir: str = local_paths.RAW_DIR,
-    save_filename: str = "returns.csv",
-  ) -> pd.DataFrame:
+  html_paths_race: list[str],
+  save_dir: str = local_paths.RAW_DIR,
+  save_filename: str = "returns.csv",
+) -> pd.DataFrame:
   dfs = {}
   for html_path in tqdm(html_paths_race):
     with open(html_path, "rb") as f:
@@ -172,29 +191,101 @@ def create_returns(
   return concat_df
 
 
+
+def process_peds_html_file(html_path: str) -> pd.DataFrame:
+  try:
+    horse_id = re.search(r'\d{10}', html_path).group()  # horse_idを抽出
+    df = pd.read_html(html_path)[2]  # `pd.read_html`でHTMLファイルを読み込み
+
+    # horse_id列を追加
+    df['horse_id'] = horse_id
+    return df
+
+  except (IndexError, FileNotFoundError, ValueError) as e:
+    print(f"Error processing {html_path}: {e}")
+    return None
+
 def create_peds(
-    html_paths_horse: list[str],
-    save_dir: str = local_paths.RAW_DIR,
-    save_filename: str = "peds.csv",
+  html_paths_horse: list[str],
+  save_dir: str = local_paths.RAW_DIR,
+  save_filename: str = "peds.csv",
+  max_workers: int = 8  # 並列処理のスレッド数
 ) -> pd.DataFrame:
-    
-    dfs = []  # 各データフレームを保存するリスト
-    for html_path in tqdm(html_paths_horse):
-      try:
-        horse_id = re.search(r'\d{10}', html_path).group()  # horse_idを一度だけ抽出
-        df = pd.read_html(html_path)[2]  # ファイルを直接`pd.read_html`で読み込む
-        # horse_id列を追加
-        df['horse_id'] = horse_id
-        dfs.append(df)  # リストにデータフレームを追加
+  # 並列処理を利用して各HTMLファイルを処理
+  with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    results = list(tqdm(executor.map(process_peds_html_file, html_paths_horse), total=len(html_paths_horse)))
 
-      except (IndexError, FileNotFoundError) as e:
-        print(f"Error processing {html_path}: {e}")
-        continue
+  # Noneを除外してデータフレームを連結
+  dfs = [df for df in results if df is not None]
+  concat_df = pd.concat(dfs, ignore_index=True)
 
-    # 最後にすべてのデータフレームを一度に結合
-    concat_df = pd.concat(dfs, ignore_index=True)
-    # horse_idをインデックスとして設定
-    concat_df.set_index('horse_id', inplace=True)
-    # インデックスがhorse_idのままCSVに保存
-    concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
-    return concat_df
+  # horse_idをインデックスとして設定
+  concat_df.set_index('horse_id', inplace=True)
+
+  # 保存処理
+  concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
+
+  return concat_df
+
+
+
+def process_jockey_html_file(html_path: str) -> pd.DataFrame:
+  try:
+    # HTMLファイルを読み込む
+    with open(html_path, "rb") as f:
+      jockey_id = re.search(r'\d{5}', html_path).group()  # jockey_idを抽出
+      html = f.read()
+      df = pd.read_html(html)[0]
+
+      # jockey_id列を追加
+      df['jockey_id'] = jockey_id
+      return df
+
+  except (IndexError, FileNotFoundError, ValueError) as e:
+    print(f"Error processing {html_path}: {e}")
+    return None
+  except Exception as e:
+    print(f"Unexpected error processing {html_path}: {e}")
+    return None
+
+def create_jockeys(
+  html_paths_jockey: list[str],
+  save_dir: str = local_paths.RAW_DIR,
+  save_filename: str = "jockey.csv",
+  max_workers: int = 8  # 並列処理のスレッド数
+) -> pd.DataFrame:
+  # 並列処理を利用して各HTMLファイルを処理
+  with ThreadPoolExecutor(max_workers=max_workers) as executor:
+    results = list(tqdm(executor.map(process_jockey_html_file, html_paths_jockey), total=len(html_paths_jockey)))
+
+  # Noneを除外してデータフレームを連結
+  dfs = [df for df in results if df is not None]
+  concat_df = pd.concat(dfs, ignore_index=True)
+
+  # jockey_idをインデックスとして設定
+  concat_df.set_index('jockey_id', inplace=True)
+
+  # マルチインデックスのカラム名を結合
+  new_columns = []
+  seen_columns = set()  # 重複するカラム名のチェック用
+  for col in concat_df.columns:
+    # マルチインデックスかどうかを確認
+    if isinstance(col, tuple):
+      main_col = col[0]  # 第一要素を取得
+      # 重複チェック
+      if main_col not in seen_columns:
+        new_columns.append(main_col)  # 重複なし：第一要素のみ追加
+        seen_columns.add(main_col)  # チェックリストに追加
+      else:
+        new_columns.append('_'.join(col))  # 重複あり：全部結合
+    else:
+      new_columns.append(col)
+  concat_df.columns = new_columns
+
+  # 保存処理
+  concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
+
+  return concat_df
+
+
+
