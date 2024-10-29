@@ -5,10 +5,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import category_encoders as ce
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import KFold, cross_val_score
+from sklearn.model_selection import KFold
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, f1_score, precision_score, recall_score
 from imblearn.under_sampling import RandomUnderSampler
-import random
+from sklearn.decomposition import PCA
 
 from sklearn.ensemble import RandomForestClassifier
 import lightgbm as lgb
@@ -33,6 +33,7 @@ class PredBase:
     threshold: float = None, 
     stochastic_variation: bool = True,
     max_bet: int = 5000,
+    pivot_horse: bool = True,
     train = True
   ):
     
@@ -41,20 +42,22 @@ class PredBase:
     self.threshold = threshold  # 閾値の初期化
     self.stochastic_variation = stochastic_variation  # 確率による賭け金額の調整の有無
     self.max_bet = max_bet  # 1回あたりの最大賭け金額の初期化
+    self.pivot_horse = pivot_horse  # 軸馬の有無
     self.train = train  # インスタンス時の訓練の有無
 
 
 
-  def preprocess_df(self, df):
+  def preprocess_df(self, df, encoding=True):
     df_d = df.dropna().copy()
     
-    # 対象のカラム
-    columns_to_encode = ['horse_id', 'jockey_id', 'trainer_id', 'owner_id']
+      # 対象のカラム
+    if encoding:
+      columns_to_encode = ['horse_id', 'jockey_id', 'trainer_id', 'owner_id']
 
-    # 各カラムごとにLabelEncoderを適用
-    for column in columns_to_encode:
-      le = LabelEncoder()  # LabelEncoderのインスタンスを作成
-      df_d[column] = le.fit_transform(df_d[column])  # カラムにエンコードを適用
+      # 各カラムごとにLabelEncoderを適用
+      for column in columns_to_encode:
+        le = LabelEncoder()  # LabelEncoderのインスタンスを作成
+        df_d[column] = le.fit_transform(df_d[column])  # カラムにエンコードを適用
 
     return df_d
   
@@ -113,27 +116,89 @@ class PredBase:
       bet_type_return = '三連単'
 
     return combinations, bet_type_return
+  
+
+
+  def process_bet_type_combinations_with_pivot_horse(self, bet_type, predict_num, race_group):
+    """
+    確率が0.8以上の馬を軸馬として設定し、ボックス買いの組み合わせと払戻の種類を生成します。
+    """
+    # 確率が0.8以上の馬をフィルタリング
+    pivot_horse_candidates = race_group[race_group['predicted_proba'] >= 0.85].sort_values('predicted_proba', ascending=False)
+
+    # 軸馬を選定
+    if self.pivot_horse and not pivot_horse_candidates.empty:
+      pivot_horse = pivot_horse_candidates.index[0]  # 最初の候補を軸馬として選択
+      non_pivot_horses = race_group.index.difference([pivot_horse])
+    else:
+      pivot_horse = None
+
+    # 軸馬が存在し、ボックス買いが可能な場合
+    if pivot_horse and predict_num >= (2 if bet_type in ['umaren', 'umatan'] else 3):
+      if bet_type == 'umaren':
+        combinations = [(pivot_horse, other) for other in non_pivot_horses]
+        bet_type_return = '馬連'
+      elif bet_type == 'umatan':
+        combinations = [(pivot_horse, other) for other in non_pivot_horses]
+        bet_type_return = '馬単'
+      elif bet_type == 'sanrenpuku':
+        combinations = [(pivot_horse, *combo) for combo in itertools.combinations(non_pivot_horses, 2)]
+        bet_type_return = '三連複'
+      elif bet_type == 'sanrentan':
+        combinations = [(pivot_horse, *combo) for combo in itertools.permutations(non_pivot_horses, 2)]
+        bet_type_return = '三連単'
+    else:
+      # 通常のボックス買い（従来通り）
+      combinations, bet_type_return = self.process_bet_type_combinations(bet_type, predict_num, race_group)
+
+    return combinations, bet_type_return, pivot_horse
 
 
 
-  def calc_returns(self, race_group, df_add_returns, combinations, bet_type_return, rank_threshold):
+  def calc_returns(self, race_group, df_add_returns, combinations, bet_type_return, rank_threshold, pivot_horse):
     """組み合わせ数に応じて払い戻し額と賭け金額を計算"""
     bet_amount = self.calc_bet_amount(race_group)
     bet_sum = bet_amount * len(combinations)
     df_add_returns.loc[race_group.index, 'bet_sum'] = bet_sum
 
     # 正しい結果の場合、そうでない場合の払い戻し額を設定  
-    correct = race_group[race_group['rank'] <= rank_threshold]
-    if len(correct) == rank_threshold:
-      returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
-      try:
-        df_add_returns.loc[race_group.index, 'returns'] = int(returns_value)
-      except ValueError:
-        df_add_returns.loc[race_group.index, 'returns'] = np.nan
-    else:
-      df_add_returns.loc[race_group.index, 'returns'] = 0
+    correct = race_group[race_group['rank'] <= rank_threshold].sort_values('rank', ascending=True)
 
-    df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
+    # デフォルトで bool_set を False に設定
+    bool_set = False
+
+    # 馬単、三連単で軸馬がいる場合の払い戻し条件
+    if pivot_horse is not None and len(correct) > 0:
+      if bet_type_return == '馬単':
+        # 軸馬が1着である必要がある
+        bool_set = correct.index[0] == pivot_horse
+      elif bet_type_return == '三連単':
+        # 軸馬が1着で、かつ正しい組み合わせが存在すること
+        bool_set = correct.index[0] == pivot_horse 
+
+    if bet_type_return == '馬単' or bet_type_return == '三連単':
+      if len(correct) == rank_threshold and bool_set:
+        returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
+        try:
+          df_add_returns.loc[race_group.index, 'returns'] = int(returns_value)
+        except ValueError:
+          df_add_returns.loc[race_group.index, 'returns'] = np.nan
+      else:
+        df_add_returns.loc[race_group.index, 'returns'] = 0
+
+      df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
+
+    else:
+      if len(correct) == rank_threshold:
+        returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
+        try:
+          df_add_returns.loc[race_group.index, 'returns'] = int(returns_value)
+        except ValueError:
+          df_add_returns.loc[race_group.index, 'returns'] = np.nan
+      else:
+        df_add_returns.loc[race_group.index, 'returns'] = 0
+
+      df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
 
     return df_add_returns
   
@@ -144,8 +209,6 @@ class PredBase:
     df = self.predict_target(pred_df)
 
     df = df.loc[df['predicted_target'] == 1, ['race_id', 'number', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
-
-    #df = df[df['win_odds'] >= 2].reset_index(drop=True)
 
     df_add_returns = df.merge(self.returns_df, on='race_id', how='left')
     df_add_returns['returns'] = 0
@@ -172,8 +235,8 @@ class PredBase:
 
       # 組み合わせ数に応じて払い戻し額と賭け金額を計算
       else:     
-        combinations, bet_type = self.process_bet_type_combinations(self.bet_type, predict_num, race_group)
-        df_add_returns = self.calc_returns(race_group, df_add_returns, combinations, bet_type, predict_min)
+        combinations, bet_type, pivot_horse = self.process_bet_type_combinations_with_pivot_horse(self.bet_type, predict_num, race_group)
+        df_add_returns = self.calc_returns(race_group, df_add_returns, combinations, bet_type, predict_min, pivot_horse)
 
     return df_add_returns[['race_id', 'returns', 'bet_sum']].drop_duplicates()
   
@@ -187,6 +250,7 @@ class PredBase:
     df['total_bet'] = df['bet_sum'].cumsum()
     df['total_returns'] = df['returns'].cumsum()
     df['returns_rate'] = df['total_returns'] / df['total_bet']
+    df['earned'] = df['total_returns'] - df['total_bet']
 
     return df
 
@@ -228,19 +292,31 @@ class RFModel(PredBase):
     self, 
     train_df: pd.DataFrame | None,
     returns_df: pd.DataFrame | None, 
-    bet_type='umaren', 
-    threshold=None, 
-    stochastic_variation=True,
+    bet_type = 'umaren', 
+    threshold = None, 
+    stochastic_variation = True,
     max_bet: int = 5000,
+    pivot_horse: bool = True,
+    select_features: bool = True,
+    selected_features = None,
     train = True,
-    model=None
+    model = None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, pivot_horse, train)
     self.model_type = 'rf'
     self.df = train_df
-    self.model = model if model or not self.train else self.model_train()
+    self.select_features = select_features
+    self.selected_features = selected_features
+
+    if model or not self.train:
+      self.model = model
+    elif self.select_features:
+      self.selected_features, self.model = self.model_train()
+    else:
+      self.model = self.model_train()
+
   
 
 
@@ -267,34 +343,48 @@ class RFModel(PredBase):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
+    rus = RandomUnderSampler(random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # ランダムフォレストモデルのトレーニング
     model = RandomForestClassifier(random_state=42)
     model.fit(X_train_res, y_train_res)
 
+    if self.select_features:
+      # 特徴量重要度を取得し、上位30個の特徴量を選択
+      feature_importance = pd.DataFrame({
+        'feature': X.columns,
+        'importance': model.feature_importances_
+      }).sort_values('importance', ascending=False)
+
+      # 上位30個の特徴量を使用
+      selected_features = feature_importance['feature'].head(30).tolist()
+      X_train_res = X_train_res[selected_features]
+      X_test = X_test[selected_features]
+
+      # 再度モデルをトレーニング
+      model.fit(X_train_res, y_train_res)
+
+    # 予測と評価
     if self.threshold is not None:
-      y_pred_proba = model.predict_proba(X_test)[:, 1]  # 予測確率を取得
+      y_pred_proba = model.predict_proba(X_test)[:, 1]
       y_pred = (y_pred_proba >= self.threshold).astype(int)
     else:
       y_pred = model.predict(X_test)
 
-    # モデルの評価結果を出力
     print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
     print("Classification Report:\n", classification_report(y_test, y_pred))
     self.accuracy = accuracy_score(y_test, y_pred)
     print("Accuracy:", self.accuracy)
 
-    # ランダムフォレストの場合、特徴量の重要度を表示
-    feature_importance = pd.DataFrame({
-      'feature': X.columns,
-      'importance': model.feature_importances_
-    }).sort_values('importance', ascending=False)
-    print("Feature Importance:\n", feature_importance.head(30))
+    # 特徴量の重要度も表示
+    print("Selected Feature Importance:\n", feature_importance.head(30))
 
     self.model = model
-    
+    self.selected_features = selected_features
+
+    if self.select_features:
+      return selected_features, model
 
     return model
   
@@ -308,6 +398,10 @@ class RFModel(PredBase):
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
     df_x = self.drop_columns(df_p)
+
+    if self.select_features:
+      # 特徴量重要度を取得し、上位30個の特徴量を選択
+      df_x = df_x[self.selected_features]
 
     # 閾値の有無
     if self.threshold is not None:
@@ -337,15 +431,24 @@ class NNModel(PredBase):
     threshold: float = None,
     stochastic_variation: bool = True,
     max_bet: int = 5000,
+    pivot_horse: bool = False,
     train = True,
+    select_features = True,
+    selected_features = None,
     model=None
   ):
       
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, pivot_horse, train)
     self.model_type = 'nn'
     self.scaler = StandardScaler()
+    self.select_features = select_features
+    self.selected_features = selected_features
+
     if model or not self.train:
       self.model = model
+    elif self.select_features:
+      self.df = train_df
+      self.selected_features, self.model = self.model_train()
     else:
       self.df = train_df
       self.model = self.model_train()
@@ -373,12 +476,20 @@ class NNModel(PredBase):
     X_scaled = self.scaler.transform(X)
     X_scaled = pd.DataFrame(X_scaled, columns=X.columns)
 
+    # PCAの適用 (30次元に圧縮)
+    if self.select_features:
+      pca = PCA(n_components=30)
+      X_scaled = pca.fit_transform(X_scaled)
+      X_scaled = pd.DataFrame(X_scaled, columns=[f'pca_{i+1}' for i in range(30)])  # 列名を設定
+
     # データ分割 
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
 
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
+    rus = RandomUnderSampler(random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
+
+    
 
     class Net(nn.Module):
       def __init__(self, input_size):
@@ -435,6 +546,10 @@ class NNModel(PredBase):
     print("Accuracy:", self.accuracy)
 
     self.model = model
+    self.selected_features = pca
+
+    if self.select_features:
+      return pca, model
 
     return model
     
@@ -452,6 +567,10 @@ class NNModel(PredBase):
     self.scaler.fit(df_x)
     df_x_scaled = self.scaler.transform(df_x)
     df_x_scaled = pd.DataFrame(df_x_scaled, columns=df_x.columns)
+
+    # PCA変換
+    df_x_scaled = self.selected_features.transform(df_x_scaled)
+    df_x_scaled = pd.DataFrame(df_x_scaled, columns=[f'pca_{i+1}' for i in range(self.selected_features.n_components_)])
     
     x_tensor = torch.tensor(df_x_scaled.values, dtype=torch.float32)
 
@@ -483,16 +602,26 @@ class LGBModel(PredBase):
     threshold=None, 
     stochastic_variation=True,
     max_bet: int = 5000,
+    pivot_horse: bool = True,
+    select_features: bool = True,
+    selected_features=None,
     train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, pivot_horse, train)
     self.model_type = 'lgb'
     self.df = train_df
-    self.model = model if model or not self.train else self.model_train()
+    self.select_features = select_features
+    self.selected_features = selected_features
 
+    if model or not self.train:
+      self.model = model
+    elif self.select_features:
+      self.selected_features, self.model = self.model_train()
+    else:
+      self.model = self.model_train()
 
   
   def model_train(self):
@@ -519,13 +648,30 @@ class LGBModel(PredBase):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
+    rus = RandomUnderSampler(random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # LightGBMモデルのトレーニング
     train_data = lgb.Dataset(X_train_res, label=y_train_res)
     params = {'objective': 'binary','metric': 'auc', 'boosting_type': 'gbdt', 'num_leaves': 31, 'learning_rate': 0.05}
     model = lgb.train(params, train_data, num_boost_round=100)
+
+    if self.select_features:
+      # 特徴量重要度を取得し、上位30個の特徴量を選択
+      feature_importance = pd.DataFrame({
+        'feature': X.columns,
+        'importance': model.feature_importance(importance_type='gain')
+      }).sort_values('importance', ascending=False)
+
+      # 上位30個の特徴量を使用
+      selected_features = feature_importance['feature'].head(30).tolist()
+      X_train_res = X_train_res[selected_features]
+      X_test = X_test[selected_features]
+
+      # 再度モデルをトレーニング
+      train_data_selected = lgb.Dataset(X_train_res, label=y_train_res)
+      model = lgb.train(params, train_data_selected, num_boost_round=100)
+      
     y_pred_proba = model.predict(X_test)  # 予測確率を取得
     y_pred = (y_pred_proba >= (self.threshold if self.threshold is not None else 0.5)).astype(int)
 
@@ -536,13 +682,12 @@ class LGBModel(PredBase):
     print("Accuracy:", self.accuracy)
 
     # LightGBMの場合、特徴量の重要度を表示
-    feature_importance = pd.DataFrame({
-      'feature': X.columns,
-      'importance': model.feature_importance()
-    }).sort_values('importance', ascending=False)
-    print("Feature Importance:\n", feature_importance.head(30))
+    print("Selected Feature Importance:\n", feature_importance.head(30))
 
     self.model = model
+
+    if self.select_features:
+      return selected_features, model
 
     return model
   
@@ -554,8 +699,12 @@ class LGBModel(PredBase):
     df = pred_df.copy()
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
-    df_p = self.preprocess_df(df)
+    df_p = self.preprocess_df(df, encoding=False)
     df_x = self.drop_columns(df_p)
+
+    if self.select_features:
+      # 特徴量重要度を取得し、上位30個の特徴量を選択
+      df_x = df_x[self.selected_features]
     
     y_pred_proba = self.model.predict(df_x)  # 予測確率を取得
     predicted_target = (y_pred_proba >= (self.threshold if self.threshold is not None else 0.5)).astype(int)
@@ -577,15 +726,26 @@ class XGBModel(PredBase):
     threshold=None, 
     stochastic_variation=True, 
     max_bet: int = 5000,
+    pivot_horse: bool = True,
+    select_features: bool = True,
+    selected_features = None,
     train = True,
     model=None
   ):
 
     # 学習データと払戻データを初期化
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, train)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, pivot_horse, train)
     self.model_type = 'xgb'
     self.df = train_df
-    self.model = model if model or not self.train else self.model_train()
+    self.select_features = select_features
+    self.selected_features = selected_features
+
+    if model or not self.train:
+      self.model = model
+    elif self.select_features:
+      self.selected_features, self.model = self.model_train()
+    else:
+      self.model = self.model_train()
   
 
   def model_train(self):
@@ -611,33 +771,47 @@ class XGBModel(PredBase):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     
     # ランダムアンダーサンプリング
-    rus = RandomUnderSampler(sampling_strategy=0.3, random_state=42)
+    rus = RandomUnderSampler(random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
       
     # XGBoostモデルのトレーニング
     model = xgb.XGBClassifier(objective='binary:logistic', max_depth=6, learning_rate=0.1, n_estimators=100, n_jobs=-1)
     model.fit(X_train_res, y_train_res)
 
+    if self.select_features:
+      # 特徴量重要度を取得し、上位30個の特徴量を選択
+      feature_importance = pd.DataFrame({
+        'feature': X.columns,
+        'importance': model.feature_importances_
+      }).sort_values('importance', ascending=False)
+
+      # 上位30個の特徴量を使用
+      selected_features = feature_importance['feature'].head(30).tolist()
+      X_train_res = X_train_res[selected_features]
+      X_test = X_test[selected_features]
+
+      # 再度モデルをトレーニング
+      model.fit(X_train_res, y_train_res)
+
+    # 予測と評価
     if self.threshold is not None:
-      y_pred_proba = model.predict_proba(X_test)[:, 1]  # 予測確率を取得
+      y_pred_proba = model.predict_proba(X_test)[:, 1]
       y_pred = (y_pred_proba >= self.threshold).astype(int)
     else:
       y_pred = model.predict(X_test)
 
-    # モデルの評価結果を出力
     print("Confusion Matrix:\n", confusion_matrix(y_test, y_pred))
     print("Classification Report:\n", classification_report(y_test, y_pred))
     self.accuracy = accuracy_score(y_test, y_pred)
     print("Accuracy:", self.accuracy)
 
-    # XGBoostの場合、特徴量の重要度を表示
-    feature_importance = pd.DataFrame({
-      'feature': X.columns,
-      'importance': model.feature_importances_
-    }).sort_values('importance', ascending=False)
-    print("Feature Importance:\n", feature_importance.head(30))
+    # 特徴量の重要度も表示
+    print("Selected Feature Importance:\n", feature_importance.head(30))
 
     self.model = model
+
+    if self.select_features:
+      return selected_features, model
 
     return model
   
@@ -650,7 +824,10 @@ class XGBModel(PredBase):
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
     df_x = self.drop_columns(df_p)
-    
+
+    if self.select_features:
+      # 特徴量重要度を取得し、上位30個の特徴量を選択
+      df_x = df_x[self.selected_features]
 
     # 閾値の有無
     if self.threshold is not None:
@@ -677,39 +854,46 @@ class EnsembleModel(PredBase):
     bet_type, 
     threshold=None, 
     stochastic_variation=True, 
-    max_bet: int = 5000
+    max_bet: int = 5000,
+    pivot_horse: bool = True,
+    select_features: bool = True,
   ):
-    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet)
+    super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, pivot_horse)
     self.model_type = 'ensemble'
     self.df = train_df
+    self.select_features = select_features
     self.base_models, self.meta_models = self.model_train()
 
 
 
-  def models_instance(self, df, model_type, model=None):
+  def models_instance(self, df, model_type, selected_features=None, model=None):
     """モデルのインスタンスを作成"""
     if model_type == 'rf':
       model = RFModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
-        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True, 
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation,
+        max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
         model=model
       )
     elif model_type == 'nn':
       model = NNModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
-        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True,
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation, 
+        max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
         model=model
       )
     elif model_type == 'lgb':
       model = LGBModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
-        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True,
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation,
+        max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
         model=model
       )
     elif model_type == 'xgb':
       model = XGBModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
-        threshold=self.threshold, stochastic_variation=self.stochastic_variation, train=True,
+        threshold=self.threshold, stochastic_variation=self.stochastic_variation, 
+        max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
         model=model
       )
 
@@ -740,7 +924,9 @@ class EnsembleModel(PredBase):
     # データ分割
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
+    base_models_features = {}
     base_models = {}
+    meta_models_features = {}
     meta_models = {}
 
     # 学習
@@ -755,12 +941,17 @@ class EnsembleModel(PredBase):
       for model_type in ['rf', 'nn', 'lgb', 'xgb']:
         model = self.models_instance(X_train_kf, model_type, model=None)
         val_pred = model.predict_target(X_val_kf)
+        if self.select_features:
+          base_models_features[model_type] = model.selected_features
         base_models[model_type] = model.model
+
 
         meta_train.loc[val_idx, f'predicted_proba_{model_type}'] = val_pred['predicted_proba']
         meta_train.loc[val_idx, f'predicted_target_{model_type}'] = val_pred['predicted_target']
 
     meta_model = self.models_instance(meta_train, 'lgb', model=None)
+    if self.select_features:
+      meta_models_features['lgb'] = meta_model.selected_features
     meta_models['lgb'] = meta_model.model
 
     # テストデータで予測
@@ -768,12 +959,16 @@ class EnsembleModel(PredBase):
     meta_test = X_test.copy()
 
     for key, base_model in base_models.items():
-      meta_model = self.models_instance(X_test, key, model=base_model)
+      meta_model = self.models_instance(
+        X_test, key, selected_features=base_models_features[key] if self.select_features else None, model=base_model
+      )
       test_pred = meta_model.predict_target(X_test)
       meta_test[f'predicted_proba_{key}'] = test_pred['predicted_proba']
       meta_test[f'predicted_target_{key}'] = test_pred['predicted_target']
 
-    meta_model = self.models_instance(meta_test, 'lgb', model=meta_models['lgb'])
+    meta_model = self.models_instance(
+      meta_test, 'lgb', selected_features=meta_models_features['lgb'] if self.select_features else None, model=meta_models['lgb']
+    )
     pred = meta_model.predict_target(meta_test)['predicted_target']
 
 
@@ -793,6 +988,10 @@ class EnsembleModel(PredBase):
     conf_matrix = confusion_matrix(y_test, pred)
     print(f"Confusion Matrix:\n{conf_matrix}")
 
+    if self.select_features:
+      self.base_models_features = base_models_features
+      self.meta_models_features = meta_models_features
+
     return base_models, meta_models
         
 
@@ -804,22 +1003,28 @@ class EnsembleModel(PredBase):
     df = pred_df.copy()
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
-    df_p = self.preprocess_df(df)
+    df_p = self.preprocess_df(df, encoding=False)
+    df_x = self.preprocess_df(df, encoding=True)
 
-    meta_data = df_p.copy()
+    meta_data = df_x.copy()
 
     # ベースモデルの予測
     for key, base_model in self.base_models.items():
-      meta_model = self.models_instance(df_p, key, model=base_model)
-      test_pred = meta_model.predict_target(df_p)
+      meta_model = self.models_instance(
+        df_x, key, selected_features=self.base_models_features[key] if self.select_features else None, model=base_model
+      )
+      test_pred = meta_model.predict_target(df_x)
       meta_data[f'predicted_proba_{key}'] = test_pred['predicted_proba']
       meta_data[f'predicted_target_{key}'] = test_pred['predicted_target']
 
     # メタモデルの予測
-    meta_model = self.models_instance(meta_data, 'lgb', model=self.meta_models['lgb'])
-    meta_pred = meta_model.predict_target(meta_data)
+    meta_model = self.models_instance(
+      meta_data, 'lgb', selected_features=self.meta_models_features['lgb'] if self.select_features else None, model=self.meta_models['lgb'])
+    meta_pred = meta_model.predict_target(meta_data)[['predicted_proba', 'predicted_target']]
     
-    return meta_pred
+    df_p = pd.concat([df_p, meta_pred], axis=1)
+
+    return df_p
 
     
       
