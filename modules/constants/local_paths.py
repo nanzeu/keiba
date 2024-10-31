@@ -13,6 +13,10 @@ HTML_RACE_DIR: str = os.path.join(HTML_DIR, "race")  # './data/html/race'
 HTML_HORSE_DIR: str = os.path.join(HTML_DIR, "horse")  # './data/html/horse'
 HTML_PED_DIR: str = os.path.join(HTML_DIR, "ped")  # './data/html/ped'
 HTML_JOCKEY_DIR: str = os.path.join(HTML_DIR, "jockey")  # './data/html/jockey'
+HTML_CANDIDATES_DIR: str = os.path.join(HTML_DIR, "candidates")  # './data/html/candidates'
+
+# datesディレクトリまでのパス
+DATES_DIR: str = os.path.join(DATA_DIR, "dates") # './data/dates
 
 # listsディレクトリまでのパス
 LISTS_DIR: str = os.path.join(DATA_DIR, "lists") # './data/lists
@@ -34,3 +38,6 @@ COMPLETED_DIR: str = os.path.join(DATA_DIR, "completed_data") # './data/complete
 
 # modelsディレクトリまでのパス
 MODELS_DIR: str = os.path.join(DATA_DIR, "models") # './data/models
+
+# candidatesディレクトリまでのパス
+CANDIDATES_DIR: str = os.path.join(DATA_DIR, "candidates") # './data/candidates'

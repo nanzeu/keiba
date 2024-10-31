@@ -52,7 +52,7 @@ class PredBase:
     
       # 対象のカラム
     if encoding:
-      columns_to_encode = ['horse_id', 'jockey_id', 'trainer_id', 'owner_id']
+      columns_to_encode = ['horse_id', 'jockey_id', 'trainer_id']
 
       # 各カラムごとにLabelEncoderを適用
       for column in columns_to_encode:
@@ -75,13 +75,6 @@ class PredBase:
     return df_d
 
   
-  
-  def save_model(self, output_dir=local_paths.MODELS_DIR, modelname='model'):
-    with open(os.path.join(output_dir ,f'{modelname}.pickle'), mode='wb') as f:
-      pickle.dump(self.model, f, protocol=2)
-
-
-
   def calc_bet_amount(self, group):
     if self.stochastic_variation:
       # 確率に応じて賭け金額を調整
@@ -300,7 +293,9 @@ class RFModel(PredBase):
     select_features: bool = True,
     selected_features = None,
     train = True,
-    model = None
+    model = None,
+    save = False,
+    save_name = 'rf_model'
   ):
 
     # 学習データと払戻データを初期化
@@ -309,6 +304,8 @@ class RFModel(PredBase):
     self.df = train_df
     self.select_features = select_features
     self.selected_features = selected_features
+    self.save = save
+    self.save_name = save_name
 
     if model or not self.train:
       self.model = model
@@ -350,6 +347,11 @@ class RFModel(PredBase):
     model = RandomForestClassifier(random_state=42)
     model.fit(X_train_res, y_train_res)
 
+    if self.save:
+      # モデルを保存
+      with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
+        pickle.dump(model, f)
+
     if self.select_features:
       # 特徴量重要度を取得し、上位30個の特徴量を選択
       feature_importance = pd.DataFrame({
@@ -364,6 +366,13 @@ class RFModel(PredBase):
 
       # 再度モデルをトレーニング
       model.fit(X_train_res, y_train_res)
+
+      if self.save:
+        # モデルを保存
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}..pickle'), "wb") as f:
+          pickle.dump(model, f)
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_feature..pickle'), "wb") as f:
+          pickle.dump(selected_features, f)
 
     # 予測と評価
     if self.threshold is not None:
@@ -420,6 +429,24 @@ class RFModel(PredBase):
     return df_p
   
 
+class Net(nn.Module):
+  def __init__(self, input_size):
+    super(Net, self).__init__()
+    # 数値データ用の全結合層 (ID列 + 数値列)
+    self.fc1 = nn.Linear(input_size, 128)
+    self.fc2 = nn.Linear(128, 64)
+    self.fc3 = nn.Linear(64, 32)
+    self.fc4 = nn.Linear(32, 1)
+    self.sigmoid = nn.Sigmoid()
+
+  def forward(self, x):
+    # 全結合層に通す
+    x = torch.relu(self.fc1(x))
+    x = torch.relu(self.fc2(x))
+    x = torch.relu(self.fc3(x))
+    x = self.sigmoid(self.fc4(x))
+    return x
+
 
 # PyTorchのニューラルネットワークを使った予測クラス
 class NNModel(PredBase):
@@ -435,7 +462,9 @@ class NNModel(PredBase):
     train = True,
     select_features = True,
     selected_features = None,
-    model=None
+    model=None,
+    save = False,
+    save_name = 'nn_model'
   ):
       
     super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, pivot_horse, train)
@@ -443,6 +472,8 @@ class NNModel(PredBase):
     self.scaler = StandardScaler()
     self.select_features = select_features
     self.selected_features = selected_features
+    self.save = save
+    self.save_name = save_name
 
     if model or not self.train:
       self.model = model
@@ -452,6 +483,8 @@ class NNModel(PredBase):
     else:
       self.df = train_df
       self.model = self.model_train()
+
+
 
 
   def model_train(self):
@@ -489,28 +522,9 @@ class NNModel(PredBase):
     rus = RandomUnderSampler(random_state=42)
     X_train_res, y_train_res = rus.fit_resample(X_train, y_train)
 
-    
-
-    class Net(nn.Module):
-      def __init__(self, input_size):
-        super(Net, self).__init__()
-        # 数値データ用の全結合層 (ID列 + 数値列)
-        self.fc1 = nn.Linear(input_size, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 32)
-        self.fc4 = nn.Linear(32, 1)
-        self.sigmoid = nn.Sigmoid()
-
-      def forward(self, x):
-        # 全結合層に通す
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = torch.relu(self.fc3(x))
-        x = self.sigmoid(self.fc4(x))
-        return x
-
     # モデルのインスタンス作成 (入力サイズはID列と数値列の合計)
     input_size = X_train_res.shape[1]
+
     model = Net(input_size=input_size)
 
     # トレーニング
@@ -548,7 +562,14 @@ class NNModel(PredBase):
     self.model = model
     self.selected_features = pca
 
+    if self.save:
+      torch.save(model, os.path.join(local_paths.MODELS_DIR, f"{self.save_name}.pth"))  # 全体を保存
+
     if self.select_features:
+      if self.save:
+        # PCA モデルを保存
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features..pickle'), 'wb') as f:
+          pickle.dump(pca, f)
       return pca, model
 
     return model
@@ -606,7 +627,9 @@ class LGBModel(PredBase):
     select_features: bool = True,
     selected_features=None,
     train = True,
-    model=None
+    model=None,
+    save = False,
+    save_name = 'lgb_model'
   ):
 
     # 学習データと払戻データを初期化
@@ -615,6 +638,8 @@ class LGBModel(PredBase):
     self.df = train_df
     self.select_features = select_features
     self.selected_features = selected_features
+    self.save = save
+    self.save_name = save_name
 
     if model or not self.train:
       self.model = model
@@ -656,6 +681,11 @@ class LGBModel(PredBase):
     params = {'objective': 'binary','metric': 'auc', 'boosting_type': 'gbdt', 'num_leaves': 31, 'learning_rate': 0.05}
     model = lgb.train(params, train_data, num_boost_round=100)
 
+    if self.save:
+      # モデルを保存
+      with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
+        pickle.dump(model, f)
+
     if self.select_features:
       # 特徴量重要度を取得し、上位30個の特徴量を選択
       feature_importance = pd.DataFrame({
@@ -671,6 +701,13 @@ class LGBModel(PredBase):
       # 再度モデルをトレーニング
       train_data_selected = lgb.Dataset(X_train_res, label=y_train_res)
       model = lgb.train(params, train_data_selected, num_boost_round=100)
+
+      if self.save:
+        # モデルを保存
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
+          pickle.dump(model, f)
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_selected_features.pickle'), "wb") as f:
+          pickle.dump(selected_features, f)
       
     y_pred_proba = model.predict(X_test)  # 予測確率を取得
     y_pred = (y_pred_proba >= (self.threshold if self.threshold is not None else 0.5)).astype(int)
@@ -730,7 +767,9 @@ class XGBModel(PredBase):
     select_features: bool = True,
     selected_features = None,
     train = True,
-    model=None
+    model=None,
+    save = False,
+    save_name = 'xgb_model'
   ):
 
     # 学習データと払戻データを初期化
@@ -739,6 +778,8 @@ class XGBModel(PredBase):
     self.df = train_df
     self.select_features = select_features
     self.selected_features = selected_features
+    self.save = save
+    self.save_name = save_name
 
     if model or not self.train:
       self.model = model
@@ -778,6 +819,11 @@ class XGBModel(PredBase):
     model = xgb.XGBClassifier(objective='binary:logistic', max_depth=6, learning_rate=0.1, n_estimators=100, n_jobs=-1)
     model.fit(X_train_res, y_train_res)
 
+    if self.save:
+      # モデルを保存
+      with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
+        pickle.dump(model, f)
+
     if self.select_features:
       # 特徴量重要度を取得し、上位30個の特徴量を選択
       feature_importance = pd.DataFrame({
@@ -792,6 +838,13 @@ class XGBModel(PredBase):
 
       # 再度モデルをトレーニング
       model.fit(X_train_res, y_train_res)
+
+      if self.save:
+        # モデルを保存
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
+          pickle.dump(model, f)
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_feature.pickle'), "wb") as f:
+          pickle.dump(selected_features, f)
 
     # 予測と評価
     if self.threshold is not None:
@@ -857,44 +910,56 @@ class EnsembleModel(PredBase):
     max_bet: int = 5000,
     pivot_horse: bool = True,
     select_features: bool = True,
+    base_models=None,
+    meta_models=None,
+    base_models_features=None,
+    meta_models_features=None,
+    save: bool = False
   ):
     super().__init__(returns_df, bet_type, threshold, stochastic_variation, max_bet, pivot_horse)
     self.model_type = 'ensemble'
     self.df = train_df
     self.select_features = select_features
-    self.base_models, self.meta_models = self.model_train()
+    self.save = save
+    if base_models and meta_models:
+      self.base_models = base_models
+      self.meta_models = meta_models
+      self.base_models_features = base_models_features
+      self.meta_models_features = meta_models_features
+    else:
+      self.base_models, self.meta_models, self.base_models_features, self.meta_models_features = self.model_train()
 
 
 
-  def models_instance(self, df, model_type, selected_features=None, model=None):
+  def models_instance(self, df, model_type, selected_features=None, model=None, save_name=None):
     """モデルのインスタンスを作成"""
     if model_type == 'rf':
       model = RFModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
         threshold=self.threshold, stochastic_variation=self.stochastic_variation,
         max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
-        model=model
+        model=model, save=self.save, save_name=save_name
       )
     elif model_type == 'nn':
       model = NNModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
         threshold=self.threshold, stochastic_variation=self.stochastic_variation, 
         max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
-        model=model
+        model=model, save=self.save, save_name=save_name
       )
     elif model_type == 'lgb':
       model = LGBModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
         threshold=self.threshold, stochastic_variation=self.stochastic_variation,
         max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
-        model=model
+        model=model, save=self.save, save_name=save_name
       )
     elif model_type == 'xgb':
       model = XGBModel(
         train_df=df, returns_df=self.returns_df, bet_type=self.bet_type, 
         threshold=self.threshold, stochastic_variation=self.stochastic_variation, 
         max_bet=self.max_bet, pivot_horse=self.pivot_horse, selected_features=selected_features, train=True,
-        model=model
+        model=model, save=self.save, save_name=save_name
       )
 
     return model
@@ -939,17 +1004,16 @@ class EnsembleModel(PredBase):
       X_train_kf, X_val_kf = X_train.iloc[train_idx], X_train.iloc[val_idx]
 
       for model_type in ['rf', 'nn', 'lgb', 'xgb']:
-        model = self.models_instance(X_train_kf, model_type, model=None)
+        model = self.models_instance(X_train_kf, model_type, model=None, save_name=f'en_{model_type}_basemodel')
         val_pred = model.predict_target(X_val_kf)
         if self.select_features:
           base_models_features[model_type] = model.selected_features
         base_models[model_type] = model.model
 
-
         meta_train.loc[val_idx, f'predicted_proba_{model_type}'] = val_pred['predicted_proba']
         meta_train.loc[val_idx, f'predicted_target_{model_type}'] = val_pred['predicted_target']
 
-    meta_model = self.models_instance(meta_train, 'lgb', model=None)
+    meta_model = self.models_instance(meta_train, 'lgb', model=None, save_name='en_lgb_metamodel')
     if self.select_features:
       meta_models_features['lgb'] = meta_model.selected_features
     meta_models['lgb'] = meta_model.model
@@ -988,11 +1052,7 @@ class EnsembleModel(PredBase):
     conf_matrix = confusion_matrix(y_test, pred)
     print(f"Confusion Matrix:\n{conf_matrix}")
 
-    if self.select_features:
-      self.base_models_features = base_models_features
-      self.meta_models_features = meta_models_features
-
-    return base_models, meta_models
+    return base_models, meta_models, base_models_features, meta_models_features
         
 
 

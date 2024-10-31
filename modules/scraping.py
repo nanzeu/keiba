@@ -4,6 +4,8 @@ import datetime
 from bs4 import BeautifulSoup
 from urllib.request import urlopen
 import time
+import os
+from modules.constants import local_paths
 
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
@@ -11,7 +13,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
-def get_race_date_list(start: str, end: str) -> list[str]:
+def get_race_date_list(start: str, end: str, local: bool = False) -> list[str]:
   dstart = datetime.datetime.strptime(start, '%Y-%m')
   dend = datetime.datetime.strptime(end, '%Y-%m')
   start_year = dstart.year
@@ -23,6 +25,9 @@ def get_race_date_list(start: str, end: str) -> list[str]:
   for year in range(start_year, end_year+1):
     for month in tqdm(range(start_month, end_month+1)):
       url = f'https://race.netkeiba.com/top/calendar.html?year={year}&month={month}'
+      if local:
+        url = f'https://nar.netkeiba.com/top/calendar.html?year={year}&month={month}'
+
       html = urlopen(url)
       soup = BeautifulSoup(html, "html.parser")
 
@@ -35,7 +40,7 @@ def get_race_date_list(start: str, end: str) -> list[str]:
       for tag in a:
         race_date = re.search(r'[0-9]+', tag["href"]).group()
         race_date_list.append(race_date)
-  
+
   return race_date_list
 
 
@@ -55,5 +60,5 @@ def get_race_id_list(race_date_list: list[str]) -> list[str]:
         href = li.find_element(By.TAG_NAME, "a").get_attribute("href")
         race_id = re.findall(r'race_id=(\d{12})', href)[0]
         race_id_list.append(race_id)
-  
+
   return race_id_list

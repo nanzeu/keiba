@@ -11,11 +11,13 @@ class Horse:
     completed_dir=local_paths.COMPLETED_DIR,
     input_dir=local_paths.PREPROCESSED_DIR,
     output_dir=local_paths.FEATURES_DIR,
+    candidates_dir=local_paths.CANDIDATES_DIR,
     save_filename='horse_jockey_features.csv',
     race_info_filename='race_info.csv',
     results_filename='results.csv',
     horse_results_filename='horse_results.csv',
     peds_filename=None,
+    new = False
   ):
     """
     results_add_infoの日付データを元に、
@@ -27,6 +29,11 @@ class Horse:
     race_info_path = os.path.join(input_dir, race_info_filename)
     results_path = os.path.join(input_dir, results_filename)
     horse_results_path = os.path.join(input_dir, horse_results_filename)
+
+    if new:
+      race_info_path = os.path.join(candidates_dir, race_info_filename)
+      results_path = os.path.join(candidates_dir, results_filename)
+      horse_results_path = os.path.join(completed_dir, horse_results_filename)
 
     # データの読み込み
     race_info = pd.read_csv(race_info_path, index_col=0, encoding='utf8', sep='\t')
@@ -170,8 +177,6 @@ class Horse:
     features['days_since_last_race'] = (features['reference_date'] - features['last_race_date']).dt.days
     features['race_interval_category'] = pd.cut(features['days_since_last_race'], bins=[0, 10, 30, 90, float('inf')], labels=[0, 1, 2, 3])
 
-    print(features.head(10))
-    
     # 不要なカラムを削除
     features.drop(columns=['course_len_x', 'course_len_y', 'last_race_date', 'date_max', 'time_mean', 'date_max_past_5', 'time_mean_past_5'], inplace=True)
 
@@ -188,12 +193,15 @@ class Horse:
 class Jockey:
   def __init__(
     self,
+    completed_dir=local_paths.COMPLETED_DIR,
     input_dir=local_paths.PREPROCESSED_DIR,
     output_dir=local_paths.FEATURES_DIR,
+    candidates_dir=local_paths.CANDIDATES_DIR,
     save_filename='jockey_features.csv',
     race_info_filename='race_info.csv',
     results_filename='results.csv',
     jockeys_filename='jockeys.csv',
+    new = False
   ):
     """
     results_add_infoの日付データを元に、
@@ -203,6 +211,12 @@ class Jockey:
     race_info_path = os.path.join(input_dir, race_info_filename)
     results_path = os.path.join(input_dir, results_filename)
     jockeys_path = os.path.join(input_dir, jockeys_filename)
+
+    if new:
+      race_info_path = os.path.join(candidates_dir, race_info_filename)
+      results_path = os.path.join(candidates_dir, results_filename)
+      jockeys_path = os.path.join(completed_dir, jockeys_filename)
+
 
     # データの読み込み
     race_info = pd.read_csv(race_info_path, index_col=0, encoding='utf8', sep='\t')
@@ -231,9 +245,6 @@ class Jockey:
     jockeys_with_date['year'] = jockeys_with_date['date'].dt.year  # dateから年を抽出
     jockeys_with_date.drop(columns=['date'], inplace=True)
     jockeys_with_date = jockeys_with_date.drop_duplicates()
-
-    # print(self.jockeys['jockey_id'].isin())
-    print(jockeys_with_date)
 
     filtered_jockeys = pd.merge(self.jockeys, jockeys_with_date, on='jockey_id', how='left')
 

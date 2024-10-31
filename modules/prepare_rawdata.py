@@ -50,15 +50,6 @@ def create_results(
           trainer_id_list.append(trainer_id)
         df["trainer_id"] = trainer_id_list
 
-        # owner_id列追加        
-        a_list = soup.find_all("a", href=re.compile(r'^/owner/'))
-        owner_id_list = []
-        for a in a_list:
-          owner_id = re.findall(r'\d{6}', a["href"])[0]
-          owner_id = str(owner_id).zfill(6)
-          owner_id_list.append(owner_id)
-        df["owner_id"] = owner_id_list
-
         df.index = [race_id] * len(df)
         dfs[race_id] = df
 
@@ -86,6 +77,8 @@ def process_html_file(html_path: str) -> pd.DataFrame:
   except (IndexError, ValueError) as e:
     print(f"table not found at {html_path}")
     return None
+  
+  
 
 def create_horse_results(
   html_paths_horse: list[str],

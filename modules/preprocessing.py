@@ -29,23 +29,23 @@ with open(os.path.join(local_paths.MAPPING_DIR, "place.json"), 'r',encoding='utf
   place_mapping = json.load(f)
 
 
+
 def process_results(
     input_dir: str = local_paths.RAW_DIR,
     output_dir: str = local_paths.PREPROCESSED_DIR,
     save_file_name: str = "results.csv",
+    new: bool = False,
     sex_mapping: dict = sex_mapping,
 ) -> pd.DataFrame:
   """
   input_dirからrawdataを取得し、output_dirに加工したデータを保存する
   """
-  
   # データの読み込み
   df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t")
 
   # データを加工
   df['jockey_id'] = df['jockey_id'].astype(str).str.zfill(5)
   df['trainer_id'] = df['trainer_id'].astype(str).str.zfill(5)
-  df['owner_id'] = df['owner_id'].astype(str).str.zfill(6)
   df['rank'] = pd.to_numeric(df['着順'], errors="coerce") 
   df.dropna(subset=['rank'], inplace=True)
   df['frame'] = df['枠番'].astype(int)
@@ -55,10 +55,8 @@ def process_results(
   df['impost'] = df['斤量'].astype(float)
   df['win_odds'] = df['単勝'].astype(float)
   df['popularity'] = df['人気'].astype(int)
-  df['weight'] = df['馬体重'].str.extract(r'(\d+)').astype(int)
-  df['weight'] = pd.to_numeric(df['weight'], errors="coerce")
-  df['weight_diff'] = df['馬体重'].str.extract(r'\((.+)\)').astype(int)
-  df['weight_diff'] = pd.to_numeric(df['weight_diff'], errors="coerce")
+  df['weight'] = pd.to_numeric(df['馬体重'].str.extract(r'(\d+)')[0], errors="coerce")
+  df['weight_diff'] = pd.to_numeric(df['馬体重'].str.extract(r'\((.+)\)')[0], errors="coerce").fillna(0)
 
   # 着順ではなく、race_id順にしてリークを防ぐ
   df = df.sort_values(['race_id', 'number'])

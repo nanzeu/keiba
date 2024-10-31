@@ -3,16 +3,15 @@ from tqdm import tqdm
 import os
 from urllib.request import urlopen
 import urllib
-import pandas as pd
-from bs4 import BeautifulSoup
-import re
 from concurrent.futures import ThreadPoolExecutor
-from urllib.error import URLError
 import threading
 
-from .constants import local_paths, master, url_paths  # ローカルモジュールのインポート
+from .constants import local_paths, url_paths
 
-def get_html_race(race_id_list: list[str], save_dir: str = local_paths.HTML_RACE_DIR) -> list[str]:
+def get_html_race(
+  race_id_list: list[str], 
+  save_dir: str = local_paths.HTML_RACE_DIR,
+) -> list[str]:
   """
   race_idからhtmlを取得してsave_dirに保存する。戻り値はhtml_path_list
   """
