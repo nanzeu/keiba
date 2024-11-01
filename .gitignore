@@ -1,4 +1,5 @@
 venv/
-html/
-data/
+data/*
+# 必要なファイルは除外
+!data/mapping/
 document/
