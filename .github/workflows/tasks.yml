@@ -1,0 +1,20 @@
+name: Daily Job
+
+on:
+  schedule:
+    - cron: '41 8 * * *'  # 毎日15:00(6:00(UTC))に実行
+
+jobs:
+  run_script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      - name: Run script
+        run: |
+          python regular_actions/get_candidates.py

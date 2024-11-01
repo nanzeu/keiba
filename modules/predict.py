@@ -369,9 +369,9 @@ class RFModel(PredBase):
 
       if self.save:
         # モデルを保存
-        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}..pickle'), "wb") as f:
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
           pickle.dump(model, f)
-        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_feature..pickle'), "wb") as f:
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_feature.pickle'), "wb") as f:
           pickle.dump(selected_features, f)
 
     # 予測と評価
@@ -525,6 +525,8 @@ class NNModel(PredBase):
     # モデルのインスタンス作成 (入力サイズはID列と数値列の合計)
     input_size = X_train_res.shape[1]
 
+    print(f'\ninput_size: {input_size}\n')
+
     model = Net(input_size=input_size)
 
     # トレーニング
@@ -563,12 +565,12 @@ class NNModel(PredBase):
     self.selected_features = pca
 
     if self.save:
-      torch.save(model, os.path.join(local_paths.MODELS_DIR, f"{self.save_name}.pth"))  # 全体を保存
+      torch.save(model.state_dict(), os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pth'))
 
     if self.select_features:
       if self.save:
         # PCA モデルを保存
-        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features..pickle'), 'wb') as f:
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features.pickle'), 'wb') as f:
           pickle.dump(pca, f)
       return pca, model
 
