@@ -1,5 +1,6 @@
 from modules.constants import local_paths
 from modules import create_features, predict
+from modules.predict import Net  # Net クラスのインポート
 
 import pandas as pd
 import os
@@ -52,6 +53,7 @@ def predict_candidates():
       features.loc[:, features.columns.str.contains('jockey', case=False)].fillna(0)
 
   # 新たにモデルを初期化
+  torch.serialization.add_safe_globals([Net])
   en_nn_basemodel = Net(input_size=30)
   # 保存された重みを読み込み
   en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel.pth')))
@@ -90,6 +92,7 @@ def predict_candidates():
   pred_bet = en.calc_bet(pred)
 
   pred.to_csv(os.path.join(local_paths.CANDIDATES_DIR, f'candidates_predicted.csv'), sep='\t')
+  pred_bet.to_csv(os.path.join(local_paths.CANDIDATES_DIR, f'candidates_predicted_bet.csv'), sep='\t')
 
 if __name__ == '__main__':
   predict_candidates()

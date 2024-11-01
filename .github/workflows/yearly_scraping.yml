@@ -7,8 +7,8 @@ on:
 
 
 jobs:
-  get_candidates:
-    runs-on: ubuntu-latest
+  yearly_scraping:
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
