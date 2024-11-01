@@ -30,14 +30,8 @@ def scrape_data():
       pickle.dump(race_id_list, f)
 
   except Exception as e:
-        logging.error(f"Error occurred during data scraping: {e}")
+    logging.error(f"Error occurred during data scraping: {e}")
 
-
-scheduler = BackgroundScheduler()
-
-# 毎年の1月10日の15時に実行
-scheduler.add_job(scrape_data, 'cron', month=1, day=8, hour=15)
-scheduler.start()
 
 if __name__ == "__main__":
   scrape_data()

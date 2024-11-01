@@ -254,7 +254,7 @@ class Jockey:
       filtered_jockeys['reference_year'] = filtered_jockeys['year']
       filtered_jockeys = filtered_jockeys.drop(columns=['year'])
     
-    return filtered_jockeys if not filtered_jockeys.empty else pd.DataFrame()
+    return filtered_jockeys.drop_duplicates(subset=['annual', 'jockey_id', 'reference_year']) if not filtered_jockeys.empty else pd.DataFrame()
   
   
 

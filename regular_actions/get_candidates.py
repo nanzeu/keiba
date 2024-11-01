@@ -1,7 +1,6 @@
 from modules import preapre_new_data, scraping
 from modules.constants import local_paths 
 
-import time
 from datetime import datetime, timedelta
 import pickle
 import os
@@ -29,4 +28,9 @@ def save_data():
 
     else:
       continue
+
+
+# スクリプトが直接実行されたときに関数を呼び出す
+if __name__ == "__main__":
+  save_data()
 

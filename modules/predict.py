@@ -9,6 +9,7 @@ from sklearn.model_selection import KFold
 from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, f1_score, precision_score, recall_score
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.decomposition import PCA
+from joblib import dump
 
 from sklearn.ensemble import RandomForestClassifier
 import lightgbm as lgb
@@ -148,48 +149,49 @@ class PredBase:
 
 
 
-  def calc_returns(self, race_group, df_add_returns, combinations, bet_type_return, rank_threshold, pivot_horse):
+  def calc_returns(self, race_group, df_add_returns, combinations, bet_type_return, rank_threshold, pivot_horse, bet_only=False):
     """組み合わせ数に応じて払い戻し額と賭け金額を計算"""
     bet_amount = self.calc_bet_amount(race_group)
     bet_sum = bet_amount * len(combinations)
     df_add_returns.loc[race_group.index, 'bet_sum'] = bet_sum
 
-    # 正しい結果の場合、そうでない場合の払い戻し額を設定  
-    correct = race_group[race_group['rank'] <= rank_threshold].sort_values('rank', ascending=True)
+    if not bet_only:
+      # 正しい結果の場合、そうでない場合の払い戻し額を設定  
+      correct = race_group[race_group['rank'] <= rank_threshold].sort_values('rank', ascending=True)
 
-    # デフォルトで bool_set を False に設定
-    bool_set = False
+      # デフォルトで bool_set を False に設定
+      bool_set = False
 
-    # 馬単、三連単で軸馬がいる場合の払い戻し条件
-    if pivot_horse is not None and len(correct) > 0:
-      if bet_type_return == '馬単':
-        # 軸馬が1着である必要がある
-        bool_set = correct.index[0] == pivot_horse
-      elif bet_type_return == '三連単':
-        # 軸馬が1着で、かつ正しい組み合わせが存在すること
-        bool_set = correct.index[0] == pivot_horse 
+      # 馬単、三連単で軸馬がいる場合の払い戻し条件
+      if pivot_horse is not None and len(correct) > 0:
+        if bet_type_return == '馬単':
+          # 軸馬が1着である必要がある
+          bool_set = correct.index[0] == pivot_horse
+        elif bet_type_return == '三連単':
+          # 軸馬が1着で、かつ正しい組み合わせが存在すること
+          bool_set = correct.index[0] == pivot_horse 
 
-    if bet_type_return == '馬単' or bet_type_return == '三連単':
-      if len(correct) == rank_threshold and bool_set:
-        returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
-        try:
-          df_add_returns.loc[race_group.index, 'returns'] = int(returns_value)
-        except ValueError:
-          df_add_returns.loc[race_group.index, 'returns'] = np.nan
+      if bet_type_return == '馬単' or bet_type_return == '三連単':
+        if len(correct) == rank_threshold and bool_set:
+          returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
+          try:
+            df_add_returns.loc[race_group.index, 'returns'] = int(returns_value)
+          except ValueError:
+            df_add_returns.loc[race_group.index, 'returns'] = np.nan
+        else:
+          df_add_returns.loc[race_group.index, 'returns'] = 0
+
+        df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
+
       else:
-        df_add_returns.loc[race_group.index, 'returns'] = 0
-
-      df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
-
-    else:
-      if len(correct) == rank_threshold:
-        returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
-        try:
-          df_add_returns.loc[race_group.index, 'returns'] = int(returns_value)
-        except ValueError:
-          df_add_returns.loc[race_group.index, 'returns'] = np.nan
-      else:
-        df_add_returns.loc[race_group.index, 'returns'] = 0
+        if len(correct) == rank_threshold:
+          returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
+          try:
+            df_add_returns.loc[race_group.index, 'returns'] = int(returns_value)
+          except ValueError:
+            df_add_returns.loc[race_group.index, 'returns'] = np.nan
+        else:
+          df_add_returns.loc[race_group.index, 'returns'] = 0
 
       df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
 
@@ -277,6 +279,39 @@ class PredBase:
     print(f"賭けた回数: {betting_count}回")
 
     return df
+  
+
+
+  def calc_bet(self, pred_df):
+    df = pred_df.copy()
+    df_bet = df[df['predicted_target'] == 1][['race_id', 'horse_id', 'predicted_proba', 'predicted_target']]
+
+    df_bet['bet_sum'] = 0  # 賭け金額カラムを追加
+    for race_id, race_group in df_bet.groupby('race_id'):
+      predict_num = race_group['predicted_target'].sum()
+      combinations = []  # 組み合わせを初期化
+        
+      if self.bet_type in ['umaren', 'umatan']:
+        predict_min = 2
+
+      elif self.bet_type in ['sanrenpuku', 'sanrentan']:
+        predict_min = 3
+
+      else:
+        raise RuntimeError(f"{self.bet_type} is not supported.")
+      
+      # 予想が2つまたは3つ未満の場合スキップ
+      if predict_num < predict_min:
+        continue
+      
+      else:     
+        combinations, bet_type, pivot_horse = self.process_bet_type_combinations_with_pivot_horse(self.bet_type, predict_num, race_group)
+        df_bet = self.calc_returns(race_group, df_bet, combinations, bet_type, predict_min, pivot_horse)
+
+    # 累積ベット金額と払い戻しを計算
+    df_bet['total_bet'] = df_bet['bet_sum'].cumsum()
+
+    return df_bet[['race_id', 'bet_sum', 'total_bet']].drop_duplicates()
   
 
 
@@ -371,7 +406,7 @@ class RFModel(PredBase):
         # モデルを保存
         with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
           pickle.dump(model, f)
-        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_feature.pickle'), "wb") as f:
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features.pickle'), "wb") as f:
           pickle.dump(selected_features, f)
 
     # 予測と評価
@@ -512,8 +547,8 @@ class NNModel(PredBase):
     # PCAの適用 (30次元に圧縮)
     if self.select_features:
       pca = PCA(n_components=30)
-      X_scaled = pca.fit_transform(X_scaled)
-      X_scaled = pd.DataFrame(X_scaled, columns=[f'pca_{i+1}' for i in range(30)])  # 列名を設定
+      X_pca = pca.fit_transform(X_scaled.values)  # 数値部分にPCAを適用
+      X_scaled = pd.DataFrame(X_pca, columns=[f'pca_{i+1}' for i in range(30)])  # 列名を設定
 
     # データ分割 
     X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
@@ -524,8 +559,6 @@ class NNModel(PredBase):
 
     # モデルのインスタンス作成 (入力サイズはID列と数値列の合計)
     input_size = X_train_res.shape[1]
-
-    print(f'\ninput_size: {input_size}\n')
 
     model = Net(input_size=input_size)
 
@@ -570,8 +603,7 @@ class NNModel(PredBase):
     if self.select_features:
       if self.save:
         # PCA モデルを保存
-        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features.pickle'), 'wb') as f:
-          pickle.dump(pca, f)
+        dump(pca, os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features.joblib'))
       return pca, model
 
     return model
@@ -592,8 +624,9 @@ class NNModel(PredBase):
     df_x_scaled = pd.DataFrame(df_x_scaled, columns=df_x.columns)
 
     # PCA変換
-    df_x_scaled = self.selected_features.transform(df_x_scaled)
-    df_x_scaled = pd.DataFrame(df_x_scaled, columns=[f'pca_{i+1}' for i in range(self.selected_features.n_components_)])
+    if self.select_features:
+      df_x_scaled = self.selected_features.transform(df_x_scaled.values)
+      df_x_scaled = pd.DataFrame(df_x_scaled, columns=[f'pca_{i+1}' for i in range(30)])
     
     x_tensor = torch.tensor(df_x_scaled.values, dtype=torch.float32)
 
@@ -708,7 +741,7 @@ class LGBModel(PredBase):
         # モデルを保存
         with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
           pickle.dump(model, f)
-        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_selected_features.pickle'), "wb") as f:
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features.pickle'), "wb") as f:
           pickle.dump(selected_features, f)
       
     y_pred_proba = model.predict(X_test)  # 予測確率を取得
@@ -845,7 +878,7 @@ class XGBModel(PredBase):
         # モデルを保存
         with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}.pickle'), "wb") as f:
           pickle.dump(model, f)
-        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_feature.pickle'), "wb") as f:
+        with open(os.path.join(local_paths.MODELS_DIR, f'{self.save_name}_features.pickle'), "wb") as f:
           pickle.dump(selected_features, f)
 
     # 予測と評価
