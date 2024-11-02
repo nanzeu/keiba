@@ -27,7 +27,7 @@ jobs:
 
       - name: initialize html/candidates
         run: |
-          rm -rf data/html/candidates
+          Remove-Item -Recurse -Force data/html/candidates
           mkdir -p data/html/candidates
 
       - name: Cache data files
@@ -45,4 +45,4 @@ jobs:
       - name: cleanup
         if: always()
         run: |
-          rm -rf data/html/candidates
+          Remove-Item -Recurse -Force data/html/candidates
