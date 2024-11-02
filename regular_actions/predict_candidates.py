@@ -17,7 +17,7 @@ def predict_candidates():
   
   for race_date in race_date_list:
     race_date_obj = datetime.strptime(race_date, '%Y%m%d')
-    if (race_date_obj - timedelta(days=1)).date() == datetime.now().date():
+    if (race_date_obj - timedelta(days=0)).date() == datetime.now().date():
       h = create_features.Horse(
         output_dir=local_paths.CANDIDATES_DIR,
         save_filename="horse_features.csv",
