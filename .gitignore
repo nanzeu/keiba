@@ -1,9 +1,12 @@
 venv/
-data/*
-# 必要なファイルは除外
-!data/mapping/
-!data/dates/
-!data/lists/
-!data/models/
-!data/html/candidates
+
+data/features*/
+data/completed_data/
+data/candidates_predicted/
+data/preprocessed/
+data/raw/
+
+data/html/*
+!data/html/candidates/
+
 document/
