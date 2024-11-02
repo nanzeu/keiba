@@ -2,7 +2,7 @@ name: regular actions get candidates
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # 毎日9:00(0:00(UTC))に実行
+    - cron: '0 6 * * *'  # 毎日15:00(6:00(UTC))に実行
   workflow_dispatch:       # 手動実行を可能にする設定
 
 
@@ -25,6 +25,24 @@ jobs:
         run: |
           echo "PYTHONPATH=${env:PYTHONPATH};${env:GITHUB_WORKSPACE}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
+      - name: initialize html/candidates
+        run: |
+          rm -rf data/html/candidates
+          mkdir -p data/html/candidates
+
+      - name: Cache data files
+        uses: actions/cache@v3
+        with:
+          path: data/candidates/
+          key: ${{ runner.os }}-candidates-${{ github.run_date }}
+          restore-keys: |
+            ${{ runner.os }}-candidates-
+
       - name: Run script
         run: |
           python regular_actions/get_candidates.py
+
+      - name: cleanup
+        if: always()
+        run: |
+          rm -rf data/html/candidates

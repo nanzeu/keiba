@@ -2,7 +2,7 @@ name: regular actions predict candidates
 
 on:
   schedule:
-    - cron: '15 0 * * *'  # 毎日9:00(0:00(UTC))に実行
+    - cron: '15 6 * * *'  # 毎日15:15(6:15(UTC))に実行
   workflow_dispatch:       # 手動実行を可能にする設定
 
 
@@ -25,6 +25,14 @@ jobs:
         run: |
           echo "PYTHONPATH=${env:PYTHONPATH};${env:GITHUB_WORKSPACE}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
+      - name: Cache data files
+        uses: actions/cache@v3
+        with:
+          path: data/candidates/
+          key: ${{ runner.os }}-candidates-${{ github.run_date }}
+          restore-keys: |
+            ${{ runner.os }}-candidates-
+
       - name: Run script
         run: |
-          python regular_actions/predict_candidates.py
+          python regular_actions/get_candidates.py

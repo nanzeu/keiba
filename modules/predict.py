@@ -204,7 +204,7 @@ class PredBase:
     if not bet_only:
       df = self.predict_target(pred_df)
 
-      df = df.loc[df['predicted_target'] == 1, ['race_id', 'number', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
+      df = df.loc[df['predicted_target'] == 1, ['race_id', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
 
       df_add_returns = df.merge(self.returns_df, on='race_id', how='left')
       df_add_returns['returns'] = 0
@@ -212,7 +212,7 @@ class PredBase:
 
     else:
       df = pred_df.copy()
-      df_add_returns = df[df['predicted_target'] == 1][['race_id', 'horse_id', 'predicted_proba', 'predicted_target']]
+      df_add_returns = df[df['predicted_target'] == 1][['race_id', 'predicted_proba', 'predicted_target']]
 
       df_add_returns['bet_sum'] = 0  # 賭け金額カラムを追加
 
@@ -292,38 +292,6 @@ class PredBase:
 
     return df
   
-
-
-  # def calc_bet(self, pred_df):
-  #   df = pred_df.copy()
-  #   df_bet = df[df['predicted_target'] == 1][['race_id', 'horse_id', 'predicted_proba', 'predicted_target']]
-
-  #   df_bet['bet_sum'] = 0  # 賭け金額カラムを追加
-  #   for race_id, race_group in df_bet.groupby('race_id'):
-  #     predict_num = race_group['predicted_target'].sum()
-  #     combinations = []  # 組み合わせを初期化
-        
-  #     if self.bet_type in ['umaren', 'umatan']:
-  #       predict_min = 2
-
-  #     elif self.bet_type in ['sanrenpuku', 'sanrentan']:
-  #       predict_min = 3
-
-  #     else:
-  #       raise RuntimeError(f"{self.bet_type} is not supported.")
-      
-  #     # 予想が2つまたは3つ未満の場合スキップ
-  #     if predict_num < predict_min:
-  #       continue
-      
-  #     else:     
-  #       combinations, bet_type, pivot_horse = self.process_bet_type_combinations_with_pivot_horse(self.bet_type, predict_num, race_group)
-  #       df_bet = self.calc_returns(race_group, df_bet, combinations, bet_type, predict_min, pivot_horse, bet_only=True)
-
-  #   # 累積ベット金額と払い戻しを計算
-  #   df_bet['total_bet'] = df_bet['bet_sum'].cumsum()
-
-  #   return df_bet[['race_id', 'bet_sum', 'total_bet']].drop_duplicates()
   
 
 

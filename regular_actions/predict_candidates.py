@@ -7,6 +7,8 @@ import os
 import torch
 import pickle
 from joblib import load
+import json
+from datetime import datetime
 
 
 def predict_candidates():
@@ -56,7 +58,7 @@ def predict_candidates():
   torch.serialization.add_safe_globals([Net])
   en_nn_basemodel = Net(input_size=30)
 
-  # 保存された重みを読み込み
+  # 保存されたモデル、重みを読み込み
   en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel.pth')))
 
   with open(os.path.join(local_paths.MODELS_DIR, 'en_rf_basemodel.pickle'), 'rb') as f:
@@ -83,6 +85,7 @@ def predict_candidates():
   meta_models = {'lgb': en_lgb_metamodel}
   meta_models_features = {'lgb': en_lgb_metamodel_features}
 
+  # 予想
   en = predict.EnsembleModel(
     train_df=None, returns_df=None, bet_type='sanrenpuku', threshold=0.6, 
     stochastic_variation=False, max_bet=1000, pivot_horse=True, save=True,
@@ -92,8 +95,25 @@ def predict_candidates():
   pred = en.predict_target(features)
   pred_bet = en.calc_results(pred, bet_only=True)
 
-  pred.to_csv(os.path.join(local_paths.CANDIDATES_DIR, f'candidates_predicted.csv'), sep='\t')
-  pred_bet.to_csv(os.path.join(local_paths.CANDIDATES_DIR, f'candidates_predicted_bet.csv'), sep='\t')
+  pred_target = pred[pred['predicted_target'] == 1][['race_id', 'horse_id', 'number', 'place','predicted_proba', 'predicted_target']]
+
+  pred_df = pred_target.merge(pred_bet, on=['race_id'], how='left')
+
+  with open(os.path.join(local_paths.MAPPING_DIR, 'place.json'), 'rb') as f:
+    place_mapping = json.load(f)
+
+  reversed_place = {v: k for k, v in place_mapping.items()}
+  pred_df['place'] = pred_df['place'].replace(reversed_place)
+
+  # 賭けないところは排除
+  pred_df.dropna(inplace=True)
+
+  pred_df.to_csv(
+    os.path.join(local_paths.CANDIDATES_PREDICTED, f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t"
+  )
+  pred_df[(pred_df['bet_sum'] > 0)].to_csv(
+    os.path.join(local_paths.CANDIDATES_PREDICTED, f'pred_candidates_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t"
+  )
 
 if __name__ == '__main__':
   predict_candidates()

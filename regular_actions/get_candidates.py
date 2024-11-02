@@ -35,21 +35,6 @@ def save_data():
       preprocessing.process_jockeys(input_dir=local_paths.CANDIDATES_DIR, output_dir=local_paths.CANDIDATES_DIR)
       preprocessing.process_peds(input_dir=local_paths.CANDIDATES_DIR, output_dir=local_paths.CANDIDATES_DIR)
 
-      horses_p = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'horse_results.csv'), index_col=0, encoding='utf8', sep='\t')
-      jockeys_p = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'jockeys.csv'), index_col=0, encoding='utf8', sep='\t', dtype={'jockey_id': str})
-      peds_p = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'peds.csv'), index_col=0, encoding='utf8', sep='\t')
-
-      horse_results = pd.read_csv(os.path.join(local_paths.COMPLETED_DIR, 'horse_results.csv'), index_col=0, encoding='utf8', sep='\t')
-      jockeys = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'jockeys.csv'), index_col=0, encoding='utf8', sep='\t', dtype={'jockey_id': str})
-      peds = pd.read_csv(os.path.join(local_paths.COMPLETED_DIR, 'peds.csv'), index_col=0, encoding='utf8', sep='\t')
-
-      pd.concat([horse_results, horses_p]).drop_duplicates().\
-        to_csv(os.path.join(local_paths.COMPLETED_DIR, 'horse_results.csv'), encoding='utf8', sep='\t')
-      pd.concat([jockeys, jockeys_p]).drop_duplicates()\
-        .to_csv(os.path.join(local_paths.COMPLETED_DIR, 'jockeys.csv'), encoding='utf8', sep='\t')
-      pd.concat([peds, peds_p]).drop_duplicates()\
-        .to_csv(os.path.join(local_paths.COMPLETED_DIR, 'peds.csv'), encoding='utf8', sep='\t')
-
     else:
       continue
 

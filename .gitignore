@@ -4,4 +4,5 @@ data/*
 !data/mapping/
 !data/dates/
 !data/lists/
+!data/models/
 document/
