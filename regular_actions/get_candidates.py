@@ -26,8 +26,10 @@ def save_data():
       preapre_new_data.process_candidates()
 
       # 馬、騎手データを取得し、保存する（更新されたデータも取得したいので、skipしない）
-      html_paths_horse = prepare_html.get_html_horse(candidates['horse_id'].unique().tolist(), skip=False)
-      html_paths_jockeys = prepare_html.get_html_jockey(candidates['jockey_id'].unique().tolist(), skip=False)
+      html_paths_horse = prepare_html.\
+        get_html_horse(horse_id_list=candidates['horse_id'].unique().tolist(), save_dir=local_paths.CANDIDATES_DIR, skip=False)
+      html_paths_jockeys = prepare_html.\
+        get_html_jockey(jockey_id_list=candidates['jockey_id'].unique().tolist(), save_dir=local_paths.CANDIDATES_DIR, skip=False)
       prepare_rawdata.create_horse_results(html_paths_horse, save_dir=local_paths.CANDIDATES_DIR)
       prepare_rawdata.create_jockeys(html_paths_jockeys, save_dir=local_paths.CANDIDATES_DIR)
       prepare_rawdata.create_peds(html_paths_horse, save_dir=local_paths.CANDIDATES_DIR)
