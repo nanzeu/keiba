@@ -1,0 +1,21 @@
+name: Clean and Recreate Directory
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"   # 毎週月曜日の12:00 UTCに実行
+
+jobs:
+  clean_directory_job:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Clean and Recreate Directory
+        run: python regular_actions/delete_directory.py

@@ -2,7 +2,6 @@ venv/
 
 data/features*/
 data/completed_data/
-data/candidates_predicted/
 data/preprocessed/
 data/raw/
 
