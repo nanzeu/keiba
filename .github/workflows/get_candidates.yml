@@ -27,7 +27,6 @@ jobs:
 
       - name: initialize html/candidates
         run: |
-          Remove-Item -Recurse -Force data/html/candidates
           mkdir -p data/html/candidates
 
       - name: Cache data files
