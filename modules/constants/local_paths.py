@@ -31,7 +31,7 @@ RAW_DIR: str = os.path.join(DATA_DIR, "raw") # './data/raw
 MAPPING_DIR: str = os.path.join(DATA_DIR, "mapping") # './data/mapping
 
 # featuresディレクトリまでのパス
-FEATURES_DIR: str = os.path.join(DATA_DIR, "features_V3") # './data/features
+FEATURES_DIR: str = os.path.join(DATA_DIR, "features_V3.2") # './data/features
 
 # completedディレクトリまでのパス
 COMPLETED_DIR: str = os.path.join(DATA_DIR, "completed_data") # './data/completed_data

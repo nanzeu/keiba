@@ -15,8 +15,8 @@ def predict_candidates():
     save_filename="horse_features.csv",
     race_info_filename='candidates_info.csv',
     results_filename='candidates.csv', 
-    horse_results_filename='horse_results_20_to_23.csv',
-    peds_filename='peds_20_to_23.csv',
+    horse_results_filename='horse_results.csv',
+    peds_filename='peds.csv',
     new=True
   )
 
@@ -25,7 +25,7 @@ def predict_candidates():
     save_filename=f"jockey_features.csv",
     race_info_filename=f'candidates_info.csv',
     results_filename=f'candidates.csv', 
-    jockeys_filename=f'jockeys_20_to_23.csv',
+    jockeys_filename=f'jockeys.csv',
     new=True
   )
 
@@ -55,6 +55,7 @@ def predict_candidates():
   # 新たにモデルを初期化
   torch.serialization.add_safe_globals([Net])
   en_nn_basemodel = Net(input_size=30)
+
   # 保存された重みを読み込み
   en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel.pth')))
 
@@ -89,7 +90,7 @@ def predict_candidates():
   )
 
   pred = en.predict_target(features)
-  pred_bet = en.calc_bet(pred)
+  pred_bet = en.calc_results(pred, bet_only=True)
 
   pred.to_csv(os.path.join(local_paths.CANDIDATES_DIR, f'candidates_predicted.csv'), sep='\t')
   pred_bet.to_csv(os.path.join(local_paths.CANDIDATES_DIR, f'candidates_predicted_bet.csv'), sep='\t')

@@ -8,7 +8,6 @@ from modules.constants import local_paths, master
 class Horse:
   def __init__(
     self,
-    completed_dir=local_paths.COMPLETED_DIR,
     input_dir=local_paths.PREPROCESSED_DIR,
     output_dir=local_paths.FEATURES_DIR,
     candidates_dir=local_paths.CANDIDATES_DIR,
@@ -23,26 +22,29 @@ class Horse:
     results_add_infoの日付データを元に、
     それより前の日付のhorse_resultsのデータから特徴量を作成。
     """
-    self.peds_df = pd.read_csv(os.path.join(completed_dir, peds_filename), index_col=0, encoding='utf8', sep='\t') if peds_filename else None
-    
+  
     # ファイルのパスを作成
     race_info_path = os.path.join(input_dir, race_info_filename)
     results_path = os.path.join(input_dir, results_filename)
     horse_results_path = os.path.join(input_dir, horse_results_filename)
+    peds_path = os.path.join(input_dir, peds_filename)
 
     if new:
       race_info_path = os.path.join(candidates_dir, race_info_filename)
       results_path = os.path.join(candidates_dir, results_filename)
-      horse_results_path = os.path.join(completed_dir, horse_results_filename)
+      horse_results_path = os.path.join(candidates_dir, horse_results_filename)
+      peds_path = os.path.join(candidates_dir, peds_filename)
 
     # データの読み込み
     race_info = pd.read_csv(race_info_path, index_col=0, encoding='utf8', sep='\t')
     results = pd.read_csv(results_path, index_col=0, encoding='utf8', sep='\t', dtype={'jockey_id': str, 'trainer_id': str, 'owner_id': str})
-    horse_results = pd.read_csv(horse_results_path, index_col=0, encoding='utf8', sep='\t')
+
+    self.horse_results = pd.read_csv(horse_results_path, index_col=0, encoding='utf8', sep='\t')
+    self.peds_df = pd.read_csv(peds_path, index_col=0, encoding='utf8', sep='\t') if peds_filename else None
+    
 
     # race_infoとresultsの結合
     self.results_add_info = results.merge(race_info, on='race_id', how='left')
-    self.horse_results = horse_results
 
     # 過去の結果データをフィルタリングし、特徴量を作成
     self.df_f = self.filter()
@@ -80,10 +82,10 @@ class Horse:
     
     # 数値データに基づく特徴量を作成
     aggregation_config = {
-        'rank': ['mean', 'min', 'max', 'std'],
+        'rank': ['mean', 'min', 'max'],
         'n_horses': 'mean',
         'rank_diff': 'mean',
-        '3_furlongs': ['mean', 'std', 'median'],
+        '3_furlongs': ['mean', 'median'],
         'time': ['mean', 'median'],
         'prize': ['mean', 'sum'],
         'course_len': ['mean', 'median', 'min', 'max'],
@@ -132,9 +134,9 @@ class Horse:
     course_len_mode = past_horse_results.\
       groupby(['horse_id', 'reference_date'])['course_len'].apply(get_mode).reset_index(name='course_len_mode')
     avg_mode_course_len = past_horse_results.groupby(['horse_id', 'course_len']).agg({
-        'rank': ['mean', 'min', 'max', 'std'],
-        'rank_diff': ['mean', 'std'],
-        '3_furlongs': ['mean', 'std'],
+        'rank': ['mean', 'min', 'max'],
+        'rank_diff': ['mean'],
+        '3_furlongs': ['mean'],
         'time': 'mean',
         'prize': ['mean', 'sum']
     }).reset_index()
@@ -154,9 +156,9 @@ class Horse:
     course_len_mode_past_5 = past_5_results.\
       groupby(['horse_id', 'reference_date'])['course_len'].apply(get_mode).reset_index(name='course_len_mode_past_5')
     avg_mode_course_len_past_5 = past_5_results.groupby(['horse_id', 'course_len']).agg({
-        'rank': ['mean', 'min', 'max', 'std'],
-        'rank_diff': ['mean', 'std'],
-        '3_furlongs': ['mean', 'std'],
+        'rank': ['mean', 'min', 'max'],
+        'rank_diff': ['mean'],
+        '3_furlongs': ['mean'],
         'time': 'mean',
         'prize': ['mean', 'sum']
     }).reset_index()
@@ -215,7 +217,7 @@ class Jockey:
     if new:
       race_info_path = os.path.join(candidates_dir, race_info_filename)
       results_path = os.path.join(candidates_dir, results_filename)
-      jockeys_path = os.path.join(completed_dir, jockeys_filename)
+      jockeys_path = os.path.join(candidates_dir, jockeys_filename)
 
 
     # データの読み込み
@@ -264,7 +266,7 @@ class Jockey:
 
      # ジョッキーのデータに基づく特徴量を作成
     aggregation_config = {
-        'jockey_rank': ['mean','min','max','std'],
+        'jockey_rank': ['mean','min','max'],
         'jockey_n_top_1': ['mean','sum'],
         'jockey_n_top_2': ['mean','sum'],
         'jockey_n_top_3': ['mean','sum'],
@@ -308,10 +310,6 @@ class Jockey:
 
     features = features.merge(last_year_data, on='jockey_id', how='left')
     features = features.merge(past_jockeys_last_two_year, on='jockey_id', how='left', suffixes=('', '_last_two_years'))
-
-    # 標準偏差がNaNの場合に他の騎手の標準偏差の平均で補完する
-    mean_rank_std = features['jockey_rank_std'].mean()  # 他の騎手の標準偏差の平均
-    features['jockey_rank_std'] = features['jockey_rank_std'].fillna(mean_rank_std)
 
     features.fillna(0, inplace=True)
 

@@ -55,8 +55,6 @@ def process_results(
   df['impost'] = df['斤量'].astype(float)
   df['win_odds'] = df['単勝'].astype(float)
   df['popularity'] = df['人気'].astype(int)
-  df['weight'] = pd.to_numeric(df['馬体重'].str.extract(r'(\d+)')[0], errors="coerce")
-  df['weight_diff'] = pd.to_numeric(df['馬体重'].str.extract(r'\((.+)\)')[0], errors="coerce").fillna(0)
 
   # 着順ではなく、race_id順にしてリークを防ぐ
   df = df.sort_values(['race_id', 'number'])

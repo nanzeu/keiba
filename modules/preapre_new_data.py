@@ -143,7 +143,7 @@ def create_candidates_info(
   place_mapping: dict = place_mapping,
 ) -> pd.DataFrame:
   
-  date = (datetime.now() - timedelta(days=1)).date()
+  date = (datetime.now() + timedelta(days=1)).date()
 
   dfs = {}
   for html_path in tqdm(html_paths_candidates):
@@ -238,8 +238,6 @@ def process_candidates(
   df['sex'] = df['性齢'].str[0].map(sex_mapping)
   df['age'] = df['性齢'].str[1:].astype(int)
   df['impost'] = df['斤量'].astype(float)
-  df['weight'] = pd.to_numeric(df['馬体重(増減)'].str.extract(r'(\d+)')[0], errors="coerce")
-  df['weight_diff'] = pd.to_numeric(df['馬体重(増減)'].str.extract(r'\((.+)\)')[0], errors="coerce").fillna(0)
 
   # 着順ではなく、race_id順にしてリークを防ぐ
   df = df.sort_values(['race_id', 'number'])

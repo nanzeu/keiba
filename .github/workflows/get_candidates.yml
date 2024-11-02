@@ -25,7 +25,6 @@ jobs:
         run: |
           echo "PYTHONPATH=${env:PYTHONPATH};${env:GITHUB_WORKSPACE}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
-
       - name: Run script
         run: |
           python regular_actions/get_candidates.py

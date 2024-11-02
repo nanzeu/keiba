@@ -1,7 +1,8 @@
-from modules import preapre_new_data, scraping
+from modules import preapre_new_data, scraping, prepare_html, prepare_rawdata, preprocessing
 from modules.constants import local_paths 
 
 from datetime import datetime, timedelta
+import pandas as pd
 import pickle
 import os
 
@@ -20,11 +21,34 @@ def save_data():
       # candidates、candidates_infoとして保存し前処理する。
       race_id_list = scraping.get_race_id_list([race_date])
       html_paths_candidates = preapre_new_data.get_html_candidates(race_id_list)
-      preapre_new_data.create_candidates(html_paths_candidates)
+      candidates = preapre_new_data.create_candidates(html_paths_candidates)
       preapre_new_data.create_candidates_info(html_paths_candidates)
       preapre_new_data.process_candidates()
-      
-      print(f"HTML data saved for race ID: {race_id_list}")
+
+      # 馬、騎手データを取得し、保存する（更新されたデータも取得したいので、skipしない）
+      html_paths_horse = prepare_html.get_html_horse(candidates['horse_id'].unique().tolist(), skip=False)
+      html_paths_jockeys = prepare_html.get_html_jockey(candidates['jockey_id'].unique().tolist(), skip=False)
+      prepare_rawdata.create_horse_results(html_paths_horse, save_dir=local_paths.CANDIDATES_DIR)
+      prepare_rawdata.create_jockeys(html_paths_jockeys, save_dir=local_paths.CANDIDATES_DIR)
+      prepare_rawdata.create_peds(html_paths_horse, save_dir=local_paths.CANDIDATES_DIR)
+      preprocessing.process_horse_results(input_dir=local_paths.CANDIDATES_DIR, output_dir=local_paths.CANDIDATES_DIR)
+      preprocessing.process_jockeys(input_dir=local_paths.CANDIDATES_DIR, output_dir=local_paths.CANDIDATES_DIR)
+      preprocessing.process_peds(input_dir=local_paths.CANDIDATES_DIR, output_dir=local_paths.CANDIDATES_DIR)
+
+      horses_p = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'horse_results.csv'), index_col=0, encoding='utf8', sep='\t')
+      jockeys_p = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'jockeys.csv'), index_col=0, encoding='utf8', sep='\t', dtype={'jockey_id': str})
+      peds_p = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'peds.csv'), index_col=0, encoding='utf8', sep='\t')
+
+      horse_results = pd.read_csv(os.path.join(local_paths.COMPLETED_DIR, 'horse_results.csv'), index_col=0, encoding='utf8', sep='\t')
+      jockeys = pd.read_csv(os.path.join(local_paths.CANDIDATES_DIR, 'jockeys.csv'), index_col=0, encoding='utf8', sep='\t', dtype={'jockey_id': str})
+      peds = pd.read_csv(os.path.join(local_paths.COMPLETED_DIR, 'peds.csv'), index_col=0, encoding='utf8', sep='\t')
+
+      pd.concat([horse_results, horses_p]).drop_duplicates().\
+        to_csv(os.path.join(local_paths.COMPLETED_DIR, 'horse_results.csv'), encoding='utf8', sep='\t')
+      pd.concat([jockeys, jockeys_p]).drop_duplicates()\
+        .to_csv(os.path.join(local_paths.COMPLETED_DIR, 'jockeys.csv'), encoding='utf8', sep='\t')
+      pd.concat([peds, peds_p]).drop_duplicates()\
+        .to_csv(os.path.join(local_paths.COMPLETED_DIR, 'peds.csv'), encoding='utf8', sep='\t')
 
     else:
       continue

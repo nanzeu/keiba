@@ -115,20 +115,18 @@ class PredBase:
 
   def process_bet_type_combinations_with_pivot_horse(self, bet_type, predict_num, race_group):
     """
-    確率が0.8以上の馬を軸馬として設定し、ボックス買いの組み合わせと払戻の種類を生成します。
+    確率が0.85以上の馬を軸馬として設定し、ボックス買いの組み合わせと払戻の種類を生成します。
     """
-    # 確率が0.8以上の馬をフィルタリング
-    pivot_horse_candidates = race_group[race_group['predicted_proba'] >= 0.85].sort_values('predicted_proba', ascending=False)
+    pivot_horse_candidates = race_group[race_group['predicted_proba'] >= 0.85].sort_values('predicted_proba', ascending=False).head(1)
 
-    # 軸馬を選定
     if self.pivot_horse and not pivot_horse_candidates.empty:
-      pivot_horse = pivot_horse_candidates.index[0]  # 最初の候補を軸馬として選択
+      pivot_horse = pivot_horse_candidates.index[0]
       non_pivot_horses = race_group.index.difference([pivot_horse])
+
     else:
       pivot_horse = None
 
-    # 軸馬が存在し、ボックス買いが可能な場合
-    if pivot_horse and predict_num >= (2 if bet_type in ['umaren', 'umatan'] else 3):
+    if (pivot_horse is not None) and (predict_num >= (2 if bet_type in ['umaren', 'umatan'] else 3)):
       if bet_type == 'umaren':
         combinations = [(pivot_horse, other) for other in non_pivot_horses]
         bet_type_return = '馬連'
@@ -139,17 +137,16 @@ class PredBase:
         combinations = [(pivot_horse, *combo) for combo in itertools.combinations(non_pivot_horses, 2)]
         bet_type_return = '三連複'
       elif bet_type == 'sanrentan':
-        combinations = [(pivot_horse, *combo) for combo in itertools.permutations(non_pivot_horses, 2)]
+        combinations = [(pivot_horse, first, second) for first, second in itertools.permutations(non_pivot_horses, 2)]
         bet_type_return = '三連単'
     else:
-      # 通常のボックス買い（従来通り）
       combinations, bet_type_return = self.process_bet_type_combinations(bet_type, predict_num, race_group)
 
     return combinations, bet_type_return, pivot_horse
 
 
 
-  def calc_returns(self, race_group, df_add_returns, combinations, bet_type_return, rank_threshold, pivot_horse, bet_only=False):
+  def calc_returns(self, race_group, df_add_returns, combinations, bet_type_return, rank_threshold, pivot_horse, bet_only):
     """組み合わせ数に応じて払い戻し額と賭け金額を計算"""
     bet_amount = self.calc_bet_amount(race_group)
     bet_sum = bet_amount * len(combinations)
@@ -163,7 +160,7 @@ class PredBase:
       bool_set = False
 
       # 馬単、三連単で軸馬がいる場合の払い戻し条件
-      if pivot_horse is not None and len(correct) > 0:
+      if (pivot_horse is not None) and len(correct) > 0:
         if bet_type_return == '馬単':
           # 軸馬が1着である必要がある
           bool_set = correct.index[0] == pivot_horse
@@ -193,21 +190,31 @@ class PredBase:
         else:
           df_add_returns.loc[race_group.index, 'returns'] = 0
 
+        df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
+
+    else:
       df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
 
     return df_add_returns
   
 
   
-  def returns_against_pred_bet(self, pred_df):
+  def returns_against_pred_bet(self, pred_df, bet_only):
     """予測に基づく払戻額を計算し、賭け金額を追加"""
-    df = self.predict_target(pred_df)
+    if not bet_only:
+      df = self.predict_target(pred_df)
 
-    df = df.loc[df['predicted_target'] == 1, ['race_id', 'number', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
+      df = df.loc[df['predicted_target'] == 1, ['race_id', 'number', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
 
-    df_add_returns = df.merge(self.returns_df, on='race_id', how='left')
-    df_add_returns['returns'] = 0
-    df_add_returns['bet_sum'] = 0  # 賭け金額カラムを追加
+      df_add_returns = df.merge(self.returns_df, on='race_id', how='left')
+      df_add_returns['returns'] = 0
+      df_add_returns['bet_sum'] = 0  # 賭け金額カラムを追加
+
+    else:
+      df = pred_df.copy()
+      df_add_returns = df[df['predicted_target'] == 1][['race_id', 'horse_id', 'predicted_proba', 'predicted_target']]
+
+      df_add_returns['bet_sum'] = 0  # 賭け金額カラムを追加
 
     # 各レースで払い戻し額と賭け金額を計算
     for race_id, race_group in df_add_returns.groupby('race_id'):
@@ -231,21 +238,26 @@ class PredBase:
       # 組み合わせ数に応じて払い戻し額と賭け金額を計算
       else:     
         combinations, bet_type, pivot_horse = self.process_bet_type_combinations_with_pivot_horse(self.bet_type, predict_num, race_group)
-        df_add_returns = self.calc_returns(race_group, df_add_returns, combinations, bet_type, predict_min, pivot_horse)
+        df_add_returns = self.calc_returns(race_group, df_add_returns, combinations, bet_type, predict_min, pivot_horse, bet_only)
 
-    return df_add_returns[['race_id', 'returns', 'bet_sum']].drop_duplicates()
+    if not bet_only:
+      return df_add_returns[['race_id', 'returns', 'bet_sum']].drop_duplicates()
+    else:
+      return df_add_returns[['race_id', 'bet_sum']].drop_duplicates()
   
 
 
-  def calc_returns_rate(self, pred_df):
-    df_add_returns = self.returns_against_pred_bet(pred_df)
-    df = df_add_returns.dropna(subset=['returns']).reset_index(drop=True)
+  def calc_results(self, pred_df, bet_only=False):
+    df = self.returns_against_pred_bet(pred_df, bet_only=bet_only)
+    if not bet_only:
+      df = df.dropna(subset=['returns']).reset_index(drop=True)
 
     # 累積ベット金額と払い戻しを計算
     df['total_bet'] = df['bet_sum'].cumsum()
-    df['total_returns'] = df['returns'].cumsum()
-    df['returns_rate'] = df['total_returns'] / df['total_bet']
-    df['earned'] = df['total_returns'] - df['total_bet']
+    if not bet_only:
+      df['total_returns'] = df['returns'].cumsum()
+      df['returns_rate'] = df['total_returns'] / df['total_bet']
+      df['earned'] = df['total_returns'] - df['total_bet']
 
     return df
 
@@ -253,7 +265,7 @@ class PredBase:
 
   def plot_returns_rate(self, pred_df):
     """回収率を計算し、グラフを生成"""
-    df = self.calc_returns_rate(pred_df)
+    df = self.calc_results(pred_df)
 
     # 賭けた回数と払い戻しの総額を計算
     betting_count = len(df)
@@ -282,36 +294,36 @@ class PredBase:
   
 
 
-  def calc_bet(self, pred_df):
-    df = pred_df.copy()
-    df_bet = df[df['predicted_target'] == 1][['race_id', 'horse_id', 'predicted_proba', 'predicted_target']]
+  # def calc_bet(self, pred_df):
+  #   df = pred_df.copy()
+  #   df_bet = df[df['predicted_target'] == 1][['race_id', 'horse_id', 'predicted_proba', 'predicted_target']]
 
-    df_bet['bet_sum'] = 0  # 賭け金額カラムを追加
-    for race_id, race_group in df_bet.groupby('race_id'):
-      predict_num = race_group['predicted_target'].sum()
-      combinations = []  # 組み合わせを初期化
+  #   df_bet['bet_sum'] = 0  # 賭け金額カラムを追加
+  #   for race_id, race_group in df_bet.groupby('race_id'):
+  #     predict_num = race_group['predicted_target'].sum()
+  #     combinations = []  # 組み合わせを初期化
         
-      if self.bet_type in ['umaren', 'umatan']:
-        predict_min = 2
+  #     if self.bet_type in ['umaren', 'umatan']:
+  #       predict_min = 2
 
-      elif self.bet_type in ['sanrenpuku', 'sanrentan']:
-        predict_min = 3
+  #     elif self.bet_type in ['sanrenpuku', 'sanrentan']:
+  #       predict_min = 3
 
-      else:
-        raise RuntimeError(f"{self.bet_type} is not supported.")
+  #     else:
+  #       raise RuntimeError(f"{self.bet_type} is not supported.")
       
-      # 予想が2つまたは3つ未満の場合スキップ
-      if predict_num < predict_min:
-        continue
+  #     # 予想が2つまたは3つ未満の場合スキップ
+  #     if predict_num < predict_min:
+  #       continue
       
-      else:     
-        combinations, bet_type, pivot_horse = self.process_bet_type_combinations_with_pivot_horse(self.bet_type, predict_num, race_group)
-        df_bet = self.calc_returns(race_group, df_bet, combinations, bet_type, predict_min, pivot_horse)
+  #     else:     
+  #       combinations, bet_type, pivot_horse = self.process_bet_type_combinations_with_pivot_horse(self.bet_type, predict_num, race_group)
+  #       df_bet = self.calc_returns(race_group, df_bet, combinations, bet_type, predict_min, pivot_horse, bet_only=True)
 
-    # 累積ベット金額と払い戻しを計算
-    df_bet['total_bet'] = df_bet['bet_sum'].cumsum()
+  #   # 累積ベット金額と払い戻しを計算
+  #   df_bet['total_bet'] = df_bet['bet_sum'].cumsum()
 
-    return df_bet[['race_id', 'bet_sum', 'total_bet']].drop_duplicates()
+  #   return df_bet[['race_id', 'bet_sum', 'total_bet']].drop_duplicates()
   
 
 
