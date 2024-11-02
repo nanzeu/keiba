@@ -2,7 +2,7 @@ name: regular actions predict candidates
 
 on:
   schedule:
-    - cron: '15 6 * * *'  # 毎日15:15(6:15(UTC))に実行
+    - cron: '30 6 * * *'  # 毎日15:30(6:30(UTC))に実行
   workflow_dispatch:       # 手動実行を可能にする設定
 
 
@@ -35,4 +35,4 @@ jobs:
 
       - name: Run script
         run: |
-          python regular_actions/get_candidates.py
+          python regular_actions/predict_candidates.py

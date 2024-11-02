@@ -10,9 +10,6 @@ import os
 def save_data():
   with open(os.path.join(local_paths.DATES_DIR, f'race_date_list_{datetime.now().year}.pickle'), 'rb') as f:
     race_date_list = pickle.load(f)
-
-  with open(os.path.join(local_paths.LISTS_DIR, f'race_id_list_{datetime.now().year}.pickle'), 'rb') as f:
-    race_id_list = pickle.load(f)
   
   for race_date in race_date_list:
     race_date_obj = datetime.strptime(race_date, '%Y%m%d')
