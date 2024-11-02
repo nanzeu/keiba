@@ -5,4 +5,5 @@ data/*
 !data/dates/
 !data/lists/
 !data/models/
+!data/html/candidates
 document/
