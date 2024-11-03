@@ -40,5 +40,7 @@ jobs:
       - name: save pred_df for artifact
         uses: actions/upload-artifact@v3
         with:
-          name: pred_df-csv  # アーティファクト名
-          path: pred_df.csv  # 保存するファイルのパス
+          name: pred_df-candidates
+          path: |
+            pred_candidates_full_*.csv
+            pred_candidates_*.csv
