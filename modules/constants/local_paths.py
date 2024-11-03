@@ -41,4 +41,4 @@ MODELS_DIR: str = os.path.join(DATA_DIR, "models") # './data/models
 
 # candidatesディレクトリまでのパス
 CANDIDATES_DIR: str = os.path.join(DATA_DIR, "candidates") # './data/candidates'
-CANDIDATES_PREDICTED: str = os.path.join(DATA_DIR, "candidates_predicted") # './data/candidates_predicted'
+CANDIDATES_PREDICTED_DIR: str = os.path.join(DATA_DIR, "candidates_predicted") # './data/candidates_predicted'
