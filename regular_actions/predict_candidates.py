@@ -118,10 +118,10 @@ def predict_candidates():
       os.makedirs(output_dir, exist_ok=True)  # ディレクトリがない場合は作成
 
       pred_df.to_csv(
-        os.path.join(output_dir, f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t"
+        os.path.join(output_dir, f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t", encoding='utf-8'
       )
       pred_df[(pred_df['bet_sum'] > 0)].to_csv(
-        os.path.join(output_dir, f'pred_candidates_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t"
+        os.path.join(output_dir, f'pred_candidates_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t", encoding='utf-8'
       )
 
 if __name__ == '__main__':
