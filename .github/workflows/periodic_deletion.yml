@@ -18,4 +18,4 @@ jobs:
           python-version: "3.x"
 
       - name: Clean and Recreate Directory
-        run: python regular_actions/delete_directory.py
+        run: python modules/regular_actions/delete_directory.py

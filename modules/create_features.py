@@ -16,12 +16,18 @@ class Horse:
     results_filename='results.csv',
     horse_results_filename='horse_results.csv',
     peds_filename=None,
+    cs: bool = False,
     new = False
   ):
     """
     results_add_infoの日付データを元に、
     それより前の日付のhorse_resultsのデータから特徴量を作成。
     """
+
+    if cs:
+      input_dir = local_paths.PREPROCESSED_CS_DIR
+      candidates_dir = local_paths.CANDIDATES_CS_DIR
+      output_dir = local_paths.FEATURES_CS_DIR
   
     # ファイルのパスを作成
     race_info_path = os.path.join(input_dir, race_info_filename)
@@ -195,7 +201,6 @@ class Horse:
 class Jockey:
   def __init__(
     self,
-    completed_dir=local_paths.COMPLETED_DIR,
     input_dir=local_paths.PREPROCESSED_DIR,
     output_dir=local_paths.FEATURES_DIR,
     candidates_dir=local_paths.CANDIDATES_DIR,
@@ -203,12 +208,19 @@ class Jockey:
     race_info_filename='race_info.csv',
     results_filename='results.csv',
     jockeys_filename='jockeys.csv',
+    cs: bool = False,
     new = False
   ):
     """
     results_add_infoの日付データを元に、
     それより前の日付のhorse_resultsのデータから特徴量を作成。
     """
+    if cs:
+      input_dir = local_paths.PREPROCESSED_CS_DIR
+      candidates_dir = local_paths.CANDIDATES_CS_DIR
+      output_dir = local_paths.FEATURES_CS_DIR
+  
+
     # ファイルのパスを作成
     race_info_path = os.path.join(input_dir, race_info_filename)
     results_path = os.path.join(input_dir, results_filename)

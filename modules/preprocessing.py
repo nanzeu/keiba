@@ -34,14 +34,18 @@ def process_results(
     input_dir: str = local_paths.RAW_DIR,
     output_dir: str = local_paths.PREPROCESSED_DIR,
     save_file_name: str = "results.csv",
-    new: bool = False,
     sex_mapping: dict = sex_mapping,
+    cs: bool = False
 ) -> pd.DataFrame:
   """
   input_dirからrawdataを取得し、output_dirに加工したデータを保存する
   """
+  if cs:
+    input_dir = local_paths.RAW_CS_DIR
+    output_dir = local_paths.PREPROCESSED_CS_DIR
+
   # データの読み込み
-  df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t")
+  df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t", index_col=0)
 
   # データを加工
   df['jockey_id'] = df['jockey_id'].astype(str).str.zfill(5)
@@ -91,10 +95,14 @@ def process_horse_results(
     race_class_mapping: dict = race_class_mapping,
     race_type_mapping: dict = race_type_mapping,
     ground_state_mapping: dict = ground_state_mapping,
+    cs: bool = False
 ) -> pd.DataFrame:
   """
   input_dirからrawdataを取得し、output_dirに加工したデータを保存する
   """
+  if cs:
+    input_dir = local_paths.RAW_CS_DIR
+    output_dir = local_paths.PREPROCESSED_CS_DIR
   
   # データの読み込み
   df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t")
@@ -156,6 +164,7 @@ def process_race_info(
     input_dir: str = local_paths.RAW_DIR,
     output_dir: str = local_paths.PREPROCESSED_DIR,
     save_file_name: str = "race_info.csv",
+    cs: bool = False,
     weather_mapping: dict = weather_mapping,
     race_class_mapping: dict = race_class_mapping,
     race_type_mapping: dict = race_type_mapping,
@@ -166,6 +175,10 @@ def process_race_info(
   """
   input_dirからrawdataを取得し、output_dirに加工したデータを保存する
   """
+
+  if cs: 
+    input_dir = local_paths.RAW_CS_DIR
+    output_dir = local_paths.PREPROCESSED_CS_DIR
   
   # データの読み込み
   df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t")
@@ -204,8 +217,9 @@ def process_race_info(
   df_p['ground_state'] = info1_df['info1'].apply(lambda x: x[2].split(':'))
   df_p['ground_state'] = df_p['ground_state'].apply(lambda x: None if x[1] in master.WEATHER_LIST else x[1])
   df_p['ground_state'] = df_p['ground_state'].map(ground_state_mapping)
-  regex_race_class = "|".join(race_class_mapping.keys())
-  df_p['race_class'] = df['title'].str.extract(rf"({regex_race_class})")[0].map(race_class_mapping)
+  if not cs:
+    regex_race_class = "|".join(race_class_mapping.keys())
+    df_p['race_class'] = df['title'].str.extract(rf"({regex_race_class})")[0].map(race_class_mapping)
   df_p['place'] = info2_df['info2'].apply(lambda x: x[1]) 
   df_p['place'] = df_p['place'].str.extract(r'\d回(.*?)\d日目')
   df_p['place'] = df_p['place'].map(place_mapping)
@@ -215,11 +229,17 @@ def process_race_info(
   return df_p
 
 
+
 def process_returns(
-    input_dir: str = local_paths.RAW_DIR,
-    output_dir: str = local_paths.PREPROCESSED_DIR,
-    save_file_name: str = "returns.csv",
+  input_dir: str = local_paths.RAW_DIR,
+  output_dir: str = local_paths.PREPROCESSED_DIR,
+  save_file_name: str = "returns.csv",
+  cs: bool = False
 ) -> pd.DataFrame:
+  
+  if cs:
+    input_dir = local_paths.RAW_CS_DIR
+    output_dir = local_paths.PREPROCESSED_CS_DIR
   
   df = pd.read_csv(os.path.join(input_dir, save_file_name), index_col=0, sep="\t")
 
@@ -259,11 +279,17 @@ def process_returns(
 
 
 
+
 def process_peds(
     input_dir: str = local_paths.RAW_DIR,
     output_dir: str = local_paths.PREPROCESSED_DIR,
     save_file_name: str = "peds.csv",
+    cs: bool = False
 ) -> pd.DataFrame:
+  
+  if cs:
+    input_dir = local_paths.RAW_CS_DIR
+    output_dir = local_paths.PREPROCESSED_CS_DIR
   
   df = pd.read_csv(os.path.join(input_dir, save_file_name), index_col=0 , sep="\t")
 
@@ -292,7 +318,7 @@ def process_peds(
 
   concat_df.index.name = 'horse_id'
   concat_df.to_csv(os.path.join(output_dir, save_file_name), sep="\t")
-  return 
+  return concat_df
 
 
 
@@ -300,7 +326,12 @@ def process_jockeys(
     input_dir: str = local_paths.RAW_DIR,
     output_dir: str = local_paths.PREPROCESSED_DIR,
     save_file_name: str = "jockeys.csv",
+    cs: bool = False
 ) -> pd.DataFrame:
+  
+  if cs:
+    input_dir = local_paths.RAW_CS_DIR
+    output_dir = local_paths.PREPROCESSED_CS_DIR
   
   df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t", dtype={'jockey_id': str})
 

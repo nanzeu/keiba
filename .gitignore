@@ -2,8 +2,8 @@ venv/
 
 data/features*/
 data/completed_data/
-data/preprocessed/
-data/raw/
+data/preprocessed*/
+data/raw*/
 
 data/html/*
 !data/html/candidates/
