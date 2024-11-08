@@ -31,9 +31,10 @@ def predict_candidates(cs: bool = False):
     race_date_obj = datetime.strptime(race_date, '%Y%m%d')
     if (race_date_obj - timedelta(days=1)).date() == datetime.now().date():
       if not cs:
-        candidates_path = candidates_path
+        candidates_path = local_paths.CANDIDATES_DIR
       else:
         candidates_path = local_paths.CANDIDATES_CS_DIR
+
       h = create_features.Horse(
         output_dir=candidates_path,
         save_filename="horse_features.csv",
