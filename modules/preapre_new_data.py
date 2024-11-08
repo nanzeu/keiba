@@ -4,7 +4,7 @@ import re
 from bs4 import BeautifulSoup
 import os
 import time
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 import urllib
 import json
 from datetime import datetime, timedelta
@@ -44,8 +44,6 @@ def get_html_candidates(
   if cs:
     save_dir = os.path.join(save_dir, "cs")
 
-  os.makedirs(save_dir, exist_ok=True)
-
   html_path_list = []
   for race_id in tqdm(race_id_list):
     filepath = os.path.join(save_dir, f"{race_id}.bin")
@@ -61,7 +59,8 @@ def get_html_candidates(
           url = url_paths.CANDIDATE_URL + str(race_id)
         else:
           url = url_paths.CANDIDATE_CS_URL + str(race_id)
-        html = urlopen(url).read()
+        req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        html = urlopen(req).read()
         time.sleep(1)
         with open(filepath, "wb") as f:
           f.write(html)
