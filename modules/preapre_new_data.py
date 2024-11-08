@@ -16,17 +16,11 @@ from modules.constants import local_paths, url_paths
 with open(os.path.join(local_paths.MAPPING_DIR, "sex.json"), 'r',encoding='utf-8_sig') as f:
   sex_mapping = json.load(f)
 
-with open(os.path.join(local_paths.MAPPING_DIR, "weather.json"), 'r',encoding='utf-8_sig') as f:
-  weather_mapping = json.load(f)
-
 with open(os.path.join(local_paths.MAPPING_DIR, "race_class.json"), 'r',encoding='utf-8_sig') as f:
   race_class_mapping = json.load(f)
 
 with open(os.path.join(local_paths.MAPPING_DIR, "race_type.json"), 'r',encoding='utf-8_sig') as f:
   race_type_mapping = json.load(f)
-
-with open(os.path.join(local_paths.MAPPING_DIR, "ground_state.json"), 'r',encoding='utf-8_sig') as f:
-  ground_state_mapping = json.load(f)
 
 with open(os.path.join(local_paths.MAPPING_DIR, "around.json"), 'r',encoding='utf-8_sig') as f:
   around_mapping = json.load(f)
@@ -38,11 +32,19 @@ with open(os.path.join(local_paths.MAPPING_DIR, "place.json"), 'r',encoding='utf
 
 def get_html_candidates(
   race_id_list: list[str], 
-  save_dir: str = local_paths.HTML_CANDIDATES_DIR,
+  skip: bool = True,
+  cs: bool = False
 ) -> list[str]:
   """
   race_idからhtmlを取得してsave_dirに保存する。戻り値はhtml_path_list
   """
+
+  save_dir = os.path.join(local_paths.HTML_DIR, "candidates")
+
+  if cs:
+    save_dir = os.path.join(save_dir, "cs")
+
+  os.makedirs(save_dir, exist_ok=True)
 
   html_path_list = []
   for race_id in tqdm(race_id_list):
@@ -50,12 +52,15 @@ def get_html_candidates(
     html_path_list.append(filepath)
 
     # もしすでに存在すればスキップ
-    if os.path.isfile(filepath):
+    if os.path.isfile(filepath) and skip:
       print(f"skipped: {race_id}")
 
     else:
       try:
-        url = url_paths.CANDIDATE_URL + str(race_id)
+        if not cs:
+          url = url_paths.CANDIDATE_URL + str(race_id)
+        else:
+          url = url_paths.CANDIDATE_CS_URL + str(race_id)
         html = urlopen(url).read()
         time.sleep(1)
         with open(filepath, "wb") as f:
@@ -73,10 +78,18 @@ def create_candidates(
     html_paths_candidates: list[str],
     save_dir: str = local_paths.CANDIDATES_DIR,
     save_filename: str = "candidates.csv",
+    cs: bool = False
   ) -> pd.DataFrame:
   """
   html_paths_candidatesから出馬表データを取得
   """
+  if cs:
+    save_dir = local_paths.CANDIDATES_CS_DIR
+
+    # 条件に合わないファイルだけを処理
+    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
+    html_paths_candidates = [path for path in html_paths_candidates if not skip_pattern.search(os.path.basename(path))]
+
   dfs = {}
 
   for html_path in tqdm(html_paths_candidates):
@@ -102,7 +115,7 @@ def create_candidates(
         a_list = soup.find_all("a", href=re.compile(r'/jockey/'))
         jockey_id_list = []
         for a in a_list:
-          jockey_id = re.search(r'\d{5}', a["href"]).group()
+          jockey_id = re.search(r'(?<=/jockey/result/recent/)[\w\d]+', a["href"]).group()
           jockey_id = str(jockey_id).zfill(5)
           jockey_id_list.append(jockey_id)
         df["jockey_id"] = jockey_id_list
@@ -111,7 +124,7 @@ def create_candidates(
         a_list = soup.find_all("a", href=re.compile(r'/trainer/'))
         trainer_id_list = []
         for a in a_list:
-          trainer_id = re.search(r'\d{5}', a["href"]).group()
+          trainer_id = re.search(r'(?<=/trainer/result/recent/)[\w\d]+', a["href"]).group()
           trainer_id = str(trainer_id).zfill(5)
           trainer_id_list.append(trainer_id)
         df["trainer_id"] = trainer_id_list
@@ -135,13 +148,18 @@ def create_candidates_info(
   html_paths_candidates: list[str],
   output_dir: str = local_paths.CANDIDATES_DIR,
   save_filename: str = "candidates_info.csv",
-  weather_mapping: dict = weather_mapping,
+  cs: bool = False,
   race_class_mapping: dict = race_class_mapping,
   race_type_mapping: dict = race_type_mapping,
-  ground_state_mapping: dict = ground_state_mapping,
   around_mapping: dict = around_mapping,
   place_mapping: dict = place_mapping,
 ) -> pd.DataFrame:
+  
+  if cs:
+    output_dir = local_paths.CANDIDATES_CS_DIR
+    # 条件に合わないファイルだけを処理
+    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
+    html_paths_candidates = [path for path in html_paths_candidates if not skip_pattern.search(os.path.basename(path))]
   
   date = (datetime.now() + timedelta(days=1)).date()
 
@@ -165,9 +183,6 @@ def create_candidates_info(
           regex_race_class = '|'.join(race_class_mapping.keys())
           race_class = re.search(regex_race_class, span.text)
 
-          regex_ground_state = '|'.join(ground_state_mapping.keys())
-          ground_state = re.search(regex_ground_state, span.text)
-
           if type_len:
             type_len_re = re.search(r'([^\d])(\d+)', span.text)
             df['race_type'] = type_len_re.group(1).split()
@@ -178,26 +193,14 @@ def create_candidates_info(
             df['place'] = place.group()
             df['place'] = df['place'].map(place_mapping)
 
-          if race_class:
+          if race_class and not cs:
             df['race_class'] = race_class.group()
             df['race_class'] = df['race_class'].map(race_class_mapping)
-
-          if ground_state:
-            df['ground_state'] = ground_state.group()
-            df['ground_state'] = df['ground_state'].map(ground_state_mapping)
             
         for div in div_list:
-          regex_weather = '|'.join(weather_mapping.keys())
-          weather = re.search(regex_weather, div.text)
-
           regex_around = '|'.join(around_mapping.keys())
           around = re.search(regex_around, div.text)
 
-          if weather:
-            weather = re.search(r'(?<=天候:)\S+', div.text)
-            df['weather'] = weather.group()
-            df['weather'] = df['weather'].map(weather_mapping)
-          
           if around:
             df['around'] = around.group()
             df['around'] = df['around'].map(around_mapping)
@@ -224,9 +227,14 @@ def create_candidates_info(
 def process_candidates(
     input_dir: str = local_paths.CANDIDATES_DIR,
     output_dir: str = local_paths.CANDIDATES_DIR,
+    cs: bool = False,
     save_file_name: str = "candidates.csv",
     sex_mapping: dict = sex_mapping,
 ):
+  if cs:
+    input_dir = local_paths.CANDIDATES_CS_DIR
+    output_dir = local_paths.CANDIDATES_CS_DIR
+
   # データの読み込み
   df = pd.read_csv(os.path.join(input_dir, save_file_name), sep="\t")
 
@@ -243,23 +251,19 @@ def process_candidates(
   df = df.sort_values(['race_id', 'number'])
 
   # 不要なカラムを削除
-  df = df.drop(
-    columns=[
-      '枠', 
-      '馬番', 
-      '印', 
-      '馬名', 
-      '性齢', 
-      '斤量', 
-      '騎手', 
-      '厩舎', 
-      '馬体重(増減)',
-      'Unnamed:9_level_1', 
-      '人気', 
-      '登録', 
-      'メモ',
+  df = df[
+    [
+      'race_id',
+      'horse_id',
+      'jockey_id', 
+      'trainer_id', 
+      'frame', 
+      'number', 
+      'sex', 
+      'age', 
+      'impost', 
     ]
-  )
+  ]
 
   df.to_csv(os.path.join(output_dir, save_file_name), sep="\t")
 

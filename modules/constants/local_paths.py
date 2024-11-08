@@ -38,7 +38,7 @@ RAW_CS_DIR = os.path.join(DATA_DIR, "raw_cs")
 MAPPING_DIR: str = os.path.join(DATA_DIR, "mapping") # './data/mapping
 
 # featuresディレクトリまでのパス
-FEATURES_DIR: str = os.path.join(DATA_DIR, "features_V3.2") # './data/features
+FEATURES_DIR: str = os.path.join(DATA_DIR, "features_V4.0") # './data/features
 FEATURES_CS_DIR: str = os.path.join(FEATURES_DIR, "cs") # './data/features/cs
 
 # completedディレクトリまでのパス
@@ -50,4 +50,4 @@ MODELS_DIR: str = os.path.join(DATA_DIR, "models") # './data/models
 
 # candidatesディレクトリまでのパス
 CANDIDATES_DIR: str = os.path.join(DATA_DIR, "candidates") # './data/candidates
-CANDIDATES_CS_DIR: str = os.path.join(DATA_DIR, "candidates_cs") # './data/candidates_cs'
+CANDIDATES_CS_DIR: str = os.path.join(CANDIDATES_DIR, "cs") # './data/candidates/cs'

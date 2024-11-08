@@ -45,19 +45,19 @@ jobs:
             pred_candidates_full_*.csv
             pred_candidates_*.csv
 
-  download-and-use:
-    runs-on: windows-latest
-    needs: predict_candidates  # 前のジョブが完了してから実行
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+  # download-and-use:
+  #   runs-on: windows-latest
+  #   needs: predict_candidates  # 前のジョブが完了してから実行
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v2
 
-      - name: Download artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: pred_df-candidates
-          path: pred_df-candidates  # 保存先ディレクトリ
+  #     - name: Download artifact
+  #       uses: actions/download-artifact@v3
+  #       with:
+  #         name: pred_df-candidates
+  #         path: pred_df-candidates  # 保存先ディレクトリ
 
-      - name: List downloaded files
-        run: |
-          dir pred_df-candidates
+  #     - name: List downloaded files
+  #       run: |
+  #         dir pred_df-candidates

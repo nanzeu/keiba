@@ -56,9 +56,9 @@ def create_results(
     if cs:
       save_dir = local_paths.RAW_CS_DIR
 
-    # 条件に合わないファイルだけを処理
-    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
-    html_paths_race = [path for path in html_paths_race if not skip_pattern.search(os.path.basename(path))]
+      # 条件に合わないファイルだけを処理
+      skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
+      html_paths_race = [path for path in html_paths_race if not skip_pattern.search(os.path.basename(path))]
 
     dfs = {}
     with ThreadPoolExecutor() as executor:
@@ -154,6 +154,7 @@ def process_html_path(html_path: str) -> pd.DataFrame:
     return pd.DataFrame()  # エラー時は空の DataFrame を返す
 
 
+
 def create_race_info(
   html_paths_race: list[str],
   save_dir: str = local_paths.RAW_DIR,
@@ -163,6 +164,9 @@ def create_race_info(
   
   if cs:
     save_dir = local_paths.RAW_CS_DIR
+    # 条件に合わないファイルだけを処理
+    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
+    html_paths_race = [path for path in html_paths_race if not skip_pattern.search(os.path.basename(path))]
 
   # 並行処理で HTML ファイルを処理
   dfs = {}
@@ -294,7 +298,7 @@ def process_jockey_html_file(html_path: str) -> pd.DataFrame:
   try:
     # HTMLファイルを読み込む
     with open(html_path, "rb") as f:
-      jockey_id = re.search(r'jockey\\([a-zA-Z0-9]{5})', html_path).group(1)  # jockey_idを抽出
+      jockey_id = re.search(r'([^\\]{5})\.bin$', html_path).group(1)  # jockey_idを抽出
       
       html = f.read()
       df = pd.read_html(html)[0]

@@ -10,14 +10,14 @@ from modules.constants import local_paths, master
 with open(os.path.join(local_paths.MAPPING_DIR, "sex.json"), 'r',encoding='utf-8_sig') as f:
   sex_mapping = json.load(f)
 
-with open(os.path.join(local_paths.MAPPING_DIR, "weather.json"), 'r',encoding='utf-8_sig') as f:
-  weather_mapping = json.load(f)
-
 with open(os.path.join(local_paths.MAPPING_DIR, "race_class.json"), 'r',encoding='utf-8_sig') as f:
   race_class_mapping = json.load(f)
 
 with open(os.path.join(local_paths.MAPPING_DIR, "race_type.json"), 'r',encoding='utf-8_sig') as f:
   race_type_mapping = json.load(f)
+
+with open(os.path.join(local_paths.MAPPING_DIR, "weather.json"), 'r',encoding='utf-8_sig') as f:
+  weather_mapping = json.load(f)
 
 with open(os.path.join(local_paths.MAPPING_DIR, "ground_state.json"), 'r',encoding='utf-8_sig') as f:
   ground_state_mapping = json.load(f)
@@ -165,10 +165,8 @@ def process_race_info(
     output_dir: str = local_paths.PREPROCESSED_DIR,
     save_file_name: str = "race_info.csv",
     cs: bool = False,
-    weather_mapping: dict = weather_mapping,
     race_class_mapping: dict = race_class_mapping,
     race_type_mapping: dict = race_type_mapping,
-    ground_state_mapping: dict = ground_state_mapping,
     around_mapping: dict = around_mapping,
     place_mapping: dict = place_mapping,
 ) -> pd.DataFrame:
@@ -211,12 +209,6 @@ def process_race_info(
       course_len_list.append(0)
   df_p['course_len'] = course_len_list
   df_p['course_len'] = df_p['course_len'].astype(int).replace(0, np.nan)
-  df_p['weather'] = info1_df['info1'].apply(lambda x: x[1].split(':'))
-  df_p['weather'] = df_p['weather'].apply(lambda x: x[1] if len(x) > 1 else None)
-  df_p['weather'] = df_p['weather'].map(weather_mapping)
-  df_p['ground_state'] = info1_df['info1'].apply(lambda x: x[2].split(':'))
-  df_p['ground_state'] = df_p['ground_state'].apply(lambda x: None if x[1] in master.WEATHER_LIST else x[1])
-  df_p['ground_state'] = df_p['ground_state'].map(ground_state_mapping)
   if not cs:
     regex_race_class = "|".join(race_class_mapping.keys())
     df_p['race_class'] = df['title'].str.extract(rf"({regex_race_class})")[0].map(race_class_mapping)

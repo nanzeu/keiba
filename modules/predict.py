@@ -1107,9 +1107,9 @@ class EnsembleModel(PredBase):
         meta_train.loc[val_idx, f'predicted_target_{model_type}'] = val_pred['predicted_target']
 
     if not self.cs:
-      save_name = f'en_{model_type}_basemodel'
+      save_name = f'en_{self.final_model}_metamodel'
     else:
-      save_name = f'en_{model_type}_basemodel_cs'
+      save_name = f'en_{self.final_model}_metamodel_cs'
 
     meta_model = self.models_instance(meta_train, self.final_model, model=None, save_name=save_name)
     if self.select_features:
@@ -1168,10 +1168,10 @@ class EnsembleModel(PredBase):
 
     # ベースモデルの予測
     for key, base_model in self.base_models.items():
-      meta_model = self.models_instance(
+      model = self.models_instance(
         df_x, key, selected_features=self.base_models_features[key] if self.select_features else None, model=base_model
       )
-      test_pred = meta_model.predict_target(df_x)
+      test_pred = model.predict_target(df_x)
       meta_data[f'predicted_proba_{key}'] = test_pred['predicted_proba']
       meta_data[f'predicted_target_{key}'] = test_pred['predicted_target']
 
