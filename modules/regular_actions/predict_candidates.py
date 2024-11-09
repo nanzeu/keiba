@@ -119,9 +119,9 @@ def predict_candidates(cs: bool = False):
         )
 
       else:
-        # 新たにモデルを初期化
+       # 新たにモデルを初期化
         torch.serialization.add_safe_globals([Net])
-        en_nn_basemodel = Net(input_size=140)
+        en_nn_basemodel = Net(input_size=30)
 
         # 保存されたモデル、重みを読み込み
         en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs.pth')))
@@ -132,29 +132,28 @@ def predict_candidates(cs: bool = False):
           en_lgb_basemodel = pickle.load(f)
         with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_basemodel_cs.pickle'), 'rb') as f:
           en_xgb_basemodel = pickle.load(f)
-        torch.serialization.add_safe_globals([Net])
-        en_nn_metamodel = Net(input_size=140)
-        # 保存されたモデル、重みを読み込み
-        en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_metamodel_cs.pth')))
-        with open(os.path.join(local_paths.MODELS_DIR, 'en_rf_basemodel_features.pickle'), 'rb') as f:
+        with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_metamodel_cs.pickle'), 'rb') as f:
+          en_lgb_metamodel = pickle.load(f)
+        with open(os.path.join(local_paths.MODELS_DIR, 'en_rf_basemodel_cs_features.pickle'), 'rb') as f:
           en_rf_basemodel_features = pickle.load(f)
-        en_nn_basemodel_features= load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_features.joblib'))
-        with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_basemodel_features.pickle'), 'rb') as f:
+        en_nn_basemodel_features= load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs_features.joblib'))
+        with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_basemodel_cs_features.pickle'), 'rb') as f:
           en_lgb_basemodel_features = pickle.load(f)
-        with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_basemodel_features.pickle'), 'rb') as f:
+        with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_basemodel_cs_features.pickle'), 'rb') as f:
           en_xgb_basemodel_features = pickle.load(f)
-        en_nn_metamodel_features= load(os.path.join(local_paths.MODELS_DIR, 'en_nn_metamodel_cs_features.joblib'))
+        with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_metamodel_cs_features.pickle'), 'rb') as f:
+          en_lgb_metamodel_features = pickle.load(f)
 
         base_models = {'rf': en_rf_basemodel, 'nn': en_nn_basemodel, 'lgb': en_lgb_basemodel, 'xgb': en_xgb_basemodel}
         base_models_features = {'rf': en_rf_basemodel_features, 'nn': en_nn_basemodel_features, 
                                 'lgb': en_lgb_basemodel_features, 'xgb': en_xgb_basemodel_features}
-        meta_models = {'nn': en_nn_metamodel}
-        meta_models_features = {'nn': en_nn_metamodel_features}
+        meta_models = {'lgb': en_lgb_metamodel}
+        meta_models_features = {'lgb': en_lgb_metamodel_features}
 
         # 予想
         en = predict.EnsembleModel(
-          train_df=None, returns_df=None, bet_type='umaren', threshold=0.6, 
-          max_bet=400, pivot_horse=True, select_num=140, final_model='nn', save=False,
+          train_df=None, returns_df=None, bet_type='sanrenpuku', threshold=0.6, 
+          max_bet=800, pivot_horse=True, select_num=30, final_model='lgb', cs=True, save=False,
           base_models=base_models, meta_models=meta_models, base_models_features=base_models_features, meta_models_features=meta_models_features, 
         )
 
@@ -175,13 +174,20 @@ def predict_candidates(cs: bool = False):
       pred_df.dropna(inplace=True)
 
 
-      # pred_dfをルートに保存
-      pred_df.to_csv(
-        os.path.join(f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t", encoding='utf-8'
-      )
-      pred_df[(pred_df['bet_sum'] > 0)].to_csv(
-        os.path.join(f'pred_candidates_{datetime.now().strftime("%Y%m%d")}.csv'), sep="\t", encoding='utf-8'
-      )
+      if cs:
+        full_save_name = f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}_cs.csv'
+        save_name = f'pred_candidates_{datetime.now().strftime("%Y%m%d")}_cs.csv'
+      else:
+        full_save_name = f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}.csv'
+        save_name = f'pred_candidates_{datetime.now().strftime("%Y%m%d")}.csv'
+
+        # pred_dfをルートに保存
+        pred_df.to_csv(
+          full_save_name, sep="\t", encoding='utf-8'
+        )
+        pred_df[(pred_df['bet_sum'] > 0)].to_csv(
+          save_name, sep="\t", encoding='utf-8'
+        )
   
 
 if __name__ == '__main__':
