@@ -75,6 +75,8 @@ def predict_candidates(cs: bool = False):
 
       features = results_add_horse_features.merge(jockey_features, left_on=['jockey_id', 'year'], right_on=['jockey_id', 'reference_year'], how='left')
 
+      print(features)
+
       # jockeyに関連するデータの欠損値を0で埋める
       features.loc[:, features.columns.str.contains('jockey', case=False)] =\
           features.loc[:, features.columns.str.contains('jockey', case=False)].fillna(0)
@@ -175,11 +177,11 @@ def predict_candidates(cs: bool = False):
 
 
       if cs:
-        full_save_name = f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}_cs.csv'
-        save_name = f'pred_candidates_{datetime.now().strftime("%Y%m%d")}_cs.csv'
+        full_save_name = f'pred_candidates_full_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}_cs.csv'
+        save_name = f'pred_candidates_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}_cs.csv'
       else:
-        full_save_name = f'pred_candidates_full_{datetime.now().strftime("%Y%m%d")}.csv'
-        save_name = f'pred_candidates_{datetime.now().strftime("%Y%m%d")}.csv'
+        full_save_name = f'pred_candidates_full_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}.csv'
+        save_name = f'pred_candidates_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}.csv'
 
         # pred_dfをルートに保存
         pred_df.to_csv(
