@@ -74,11 +74,11 @@ def get_html_candidates(
 
 
 def create_candidates(
-    html_paths_candidates: list[str],
-    save_dir: str = local_paths.CANDIDATES_DIR,
-    save_filename: str = "candidates.csv",
-    cs: bool = False
-  ) -> pd.DataFrame:
+  html_paths_candidates: list[str],
+  save_dir: str = local_paths.CANDIDATES_DIR,
+  save_filename: str = "candidates.csv",
+  cs: bool = False
+) -> pd.DataFrame:
   """
   html_paths_candidatesから出馬表データを取得
   """
