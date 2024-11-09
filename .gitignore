@@ -9,3 +9,5 @@ data/html/*
 !data/html/candidates/
 
 document/
+
+pred_df-candidates*/
