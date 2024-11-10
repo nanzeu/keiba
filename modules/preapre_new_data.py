@@ -174,7 +174,7 @@ def create_candidates_info(
         div_list = soup.find_all('div', class_="RaceData01")
 
         for span in span_list:
-          type_len = re.search(r'(ダ|芝|障)(\d+)', span.text)
+          type_len = re.search(r'(ダ|芝)(\d+)', span.text)
 
           regex_place = '|'.join(place_mapping.keys())
           place = re.search(regex_place, span.text)

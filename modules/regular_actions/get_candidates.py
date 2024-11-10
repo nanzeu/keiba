@@ -61,5 +61,5 @@ def save_data(cs: bool = False):
 # スクリプトが直接実行されたときに関数を呼び出す
 if __name__ == "__main__":
   save_data()
-  #save_data(cs=True)
+  save_data(cs=True)
 

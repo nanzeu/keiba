@@ -134,8 +134,8 @@ def predict_candidates(cs: bool = False):
           en_lgb_basemodel = pickle.load(f)
         with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_basemodel_cs.pickle'), 'rb') as f:
           en_xgb_basemodel = pickle.load(f)
-        with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_metamodel_cs.pickle'), 'rb') as f:
-          en_lgb_metamodel = pickle.load(f)
+        with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_metamodel_cs.pickle'), 'rb') as f:
+          en_xgb_metamodel = pickle.load(f)
         with open(os.path.join(local_paths.MODELS_DIR, 'en_rf_basemodel_cs_features.pickle'), 'rb') as f:
           en_rf_basemodel_features = pickle.load(f)
         en_nn_basemodel_features= load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs_features.joblib'))
@@ -143,19 +143,19 @@ def predict_candidates(cs: bool = False):
           en_lgb_basemodel_features = pickle.load(f)
         with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_basemodel_cs_features.pickle'), 'rb') as f:
           en_xgb_basemodel_features = pickle.load(f)
-        with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_metamodel_cs_features.pickle'), 'rb') as f:
-          en_lgb_metamodel_features = pickle.load(f)
+        with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_metamodel_cs_features.pickle'), 'rb') as f:
+          en_xgb_metamodel_features = pickle.load(f)
 
         base_models = {'rf': en_rf_basemodel, 'nn': en_nn_basemodel, 'lgb': en_lgb_basemodel, 'xgb': en_xgb_basemodel}
         base_models_features = {'rf': en_rf_basemodel_features, 'nn': en_nn_basemodel_features, 
                                 'lgb': en_lgb_basemodel_features, 'xgb': en_xgb_basemodel_features}
-        meta_models = {'lgb': en_lgb_metamodel}
-        meta_models_features = {'lgb': en_lgb_metamodel_features}
+        meta_models = {'xgb': en_xgb_metamodel}
+        meta_models_features = {'xgb': en_xgb_metamodel_features}
 
         # 予想
         en = predict.EnsembleModel(
-          train_df=None, returns_df=None, bet_type='sanrenpuku', threshold=0.6, 
-          max_bet=800, pivot_horse=True, select_num=30, final_model='lgb', cs=True, save=False,
+          train_df=None, returns_df=None, bet_type='umaren', threshold=0.6, 
+          max_bet=600, pivot_horse=True, select_num=50, final_model='xgb', cs=True, save=False,
           base_models=base_models, meta_models=meta_models, base_models_features=base_models_features, meta_models_features=meta_models_features, 
         )
 
@@ -194,3 +194,4 @@ def predict_candidates(cs: bool = False):
 
 if __name__ == '__main__':
   predict_candidates()
+  predict_candidates(cs=True)
