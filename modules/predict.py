@@ -68,6 +68,7 @@ class PredBase:
     self.drop_features = [
       'race_id', 'rank', 'win_odds', 'popularity', 'date', 'reference_date', 'reference_year', 'year'
     ]
+
     # 予測に不要なカラムを削除
     df_d = df_p.drop(self.drop_features, axis=1, errors='ignore')
 

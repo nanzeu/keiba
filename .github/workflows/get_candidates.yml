@@ -11,10 +11,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
         with:
           python-version: '3.x'
       - name: Install dependencies
@@ -29,11 +29,14 @@ jobs:
         run: |
           mkdir -p data/html/candidates
 
+      - name: Set cache date key
+        run: echo "CACHE_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+
       - name: Cache data files
         uses: actions/cache@v3
         with:
           path: data/candidates/
-          key: ${{ runner.os }}-candidates-${{ github.run_date }}
+          key: ${{ runner.os }}-candidates-${{ env.CACHE_DATE }}
           restore-keys: |
             ${{ runner.os }}-candidates-
 
