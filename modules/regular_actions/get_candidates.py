@@ -9,7 +9,7 @@ import os
 
 def save_data(cs: bool = False):
   if cs:
-    with open(os.path.join(local_paths.DATES_DIR, f'date_id_dict_{datetime.now().year}_cs.pickle'), 'rb') as f:
+    with open(os.path.join(local_paths.DATES_DIR, f'date_id_dict_{datetime.now().year}.pickle'), 'rb') as f:
       date_id_dict = pickle.load(f)
     # date_id_dict.items()を使用する
     loop_target = date_id_dict.items()
