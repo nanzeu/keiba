@@ -14,16 +14,15 @@ from datetime import datetime, timedelta
 def predict_data(cs: bool = False):
   # 今月の開催日を取得
   if cs:
-    date_id_dict = scraping.get_race_date_list(
+    _, date_id_dict = scraping.get_race_date_list(
       f'{datetime.now().year}-{datetime.now().month}', f'{datetime.now().year}-{datetime.now().month}', cs=cs
     )
     loop_target = date_id_dict.items()
 
   else:
-    race_date_list = scraping.get_race_date_list(
+    race_date_list, _ = scraping.get_race_date_list(
       f'{datetime.now().year}-{datetime.now().month}', f'{datetime.now().year}-{datetime.now().month}', cs=cs
     )
-    loop_target = race_date_list
 
   for race_date in loop_target:
     # csがTrueの場合、race_dateはタプルになるためkeyとvalueに分解
