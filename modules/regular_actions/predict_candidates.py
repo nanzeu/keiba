@@ -137,6 +137,7 @@ def predict_data(cs: bool = False):
           en_xgb_basemodel = pickle.load(f)
         with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_metamodel_cs.pickle'), 'rb') as f:
           en_xgb_metamodel = pickle.load(f)
+          
         with open(os.path.join(local_paths.MODELS_DIR, 'en_rf_basemodel_cs_features.pickle'), 'rb') as f:
           en_rf_basemodel_features = pickle.load(f)
         en_nn_basemodel_features= load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs_features.joblib'))

@@ -66,7 +66,7 @@ class PredBase:
     df_p = df.copy()
 
     self.drop_features = [
-      'race_id', 'rank', 'win_odds', 'popularity', 'date', 'reference_date', 'reference_year', 'year'
+      'rank', 'win_odds', 'popularity', 'date', 'reference_date', 'reference_year', 'year'
     ]
 
     # 予測に不要なカラムを削除
@@ -391,7 +391,7 @@ class RFModel(PredBase):
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
-    df_d = self.drop_columns(df_p)
+    df_d = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     # データ分割
     X = df_d.drop(['target'], axis=1)
@@ -567,7 +567,7 @@ class NNModel(PredBase):
     
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
-    df_d = self.drop_columns(df_p)
+    df_d = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     X = df_d.drop(['target'], axis=1)
     y = df_d['target']
@@ -649,7 +649,7 @@ class NNModel(PredBase):
 
     # 新しいデータに同様の前処理を行う
     df_p = self.preprocess_df(df)
-    df_x = self.drop_columns(df_p)
+    df_x = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     # データ正規化 (標準化)
     self.scaler.fit(df_x)
@@ -732,7 +732,7 @@ class LGBModel(PredBase):
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
-    df_d = self.drop_columns(df_p)
+    df_d = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     # データ分割
     X = df_d.drop(['target'], axis=1)
@@ -813,7 +813,7 @@ class LGBModel(PredBase):
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
-    df_x = self.drop_columns(df_p)
+    df_x = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     if self.select_features:
       # 特徴量重要度を取得し、上位30個の特徴量を選択
@@ -879,7 +879,7 @@ class XGBModel(PredBase):
     
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
-    df_d = self.drop_columns(df_p)
+    df_d = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     # データ分割
     X = df_d.drop(['target'], axis=1)
@@ -960,7 +960,7 @@ class XGBModel(PredBase):
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
-    df_x = self.drop_columns(df_p)
+    df_x = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     if self.select_features:
       # 特徴量重要度を取得し、上位30個の特徴量を選択
@@ -1069,7 +1069,7 @@ class EnsembleModel(PredBase):
     else:
       raise RuntimeError(f"{self.bet_type} is not supported.")  
     
-    # とラベルエンコーディング、欠損値の処理
+    # ラベルエンコーディング、欠損値の処理
     df_p = self.preprocess_df(df)
 
     # データ分割
@@ -1163,7 +1163,7 @@ class EnsembleModel(PredBase):
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df, encoding=False)
-    df_x = self.preprocess_df(df, encoding=True)
+    df_x = self.drop_columns(df_p)
 
     meta_data = df_x.copy()
 
@@ -1176,6 +1176,8 @@ class EnsembleModel(PredBase):
       meta_data[f'predicted_proba_{key}'] = test_pred['predicted_proba']
       meta_data[f'predicted_target_{key}'] = test_pred['predicted_target']
 
+    print(meta_data)
+  
     # メタモデルの予測
     meta_model = self.models_instance(
       meta_data, self.final_model, selected_features=\
