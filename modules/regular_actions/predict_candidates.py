@@ -24,6 +24,8 @@ def predict_data(cs: bool = False):
       f'{datetime.now().year}-{datetime.now().month}', f'{datetime.now().year}-{datetime.now().month}', cs=cs
     )
 
+    loop_target = race_date_list
+
   for race_date in loop_target:
     # csがTrueの場合、race_dateはタプルになるためkeyとvalueに分解
     if cs:
