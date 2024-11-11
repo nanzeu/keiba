@@ -11,7 +11,7 @@ import json
 from datetime import datetime, timedelta
 
 
-def predict_candidates(cs: bool = False):
+def predict_data(cs: bool = False):
   if cs:
     with open(os.path.join(local_paths.DATES_DIR, f'date_id_dict_{datetime.now().year}_cs.pickle'), 'rb') as f:
       date_id_dict = pickle.load(f)
@@ -190,8 +190,10 @@ def predict_candidates(cs: bool = False):
         pred_df[(pred_df['bet_sum'] > 0)].to_csv(
           save_name, sep="\t", encoding='utf-8'
         )
+
+def predict_candidates():
+  predict_data()
+  predict_data(cs=True)
   
 
 if __name__ == '__main__':
-  predict_candidates()
-  predict_candidates(cs=True)
