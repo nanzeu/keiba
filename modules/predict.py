@@ -569,6 +569,8 @@ class NNModel(PredBase):
     df_p = self.preprocess_df(df)
     df_d = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
+    print('NN_model_train:', df_d)
+
     X = df_d.drop(['target'], axis=1)
     y = df_d['target']
 
@@ -1164,6 +1166,8 @@ class EnsembleModel(PredBase):
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df, encoding=False)
     df_x = self.drop_columns(df_p)
+
+    print('predict_dataframe', df_x)
 
     meta_data = df_x.copy()
 
