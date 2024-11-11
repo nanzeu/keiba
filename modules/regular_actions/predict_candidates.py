@@ -78,8 +78,6 @@ def predict_data(cs: bool = False):
 
       features = results_add_horse_features.merge(jockey_features, left_on=['jockey_id', 'year'], right_on=['jockey_id', 'reference_year'], how='left')
 
-      print(features)
-
       # jockeyに関連するデータの欠損値を0で埋める
       features.loc[:, features.columns.str.contains('jockey', case=False)] =\
           features.loc[:, features.columns.str.contains('jockey', case=False)].fillna(0)
@@ -126,7 +124,7 @@ def predict_data(cs: bool = False):
       else:
        # 新たにモデルを初期化
         torch.serialization.add_safe_globals([Net])
-        en_nn_basemodel = Net(input_size=30)
+        en_nn_basemodel = Net(input_size=50)
 
         # 保存されたモデル、重みを読み込み
         en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs.pth')))
