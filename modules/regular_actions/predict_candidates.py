@@ -1,5 +1,5 @@
 from modules.constants import local_paths
-from modules import create_features, predict
+from modules import scraping, create_features, predict
 from modules.predict import Net  # Net クラスのインポート
 
 import pandas as pd
@@ -12,15 +12,17 @@ from datetime import datetime, timedelta
 
 
 def predict_data(cs: bool = False):
+  # 今月の開催日を取得
   if cs:
-    with open(os.path.join(local_paths.DATES_DIR, f'date_id_dict_{datetime.now().year}_cs.pickle'), 'rb') as f:
-      date_id_dict = pickle.load(f)
-    # date_id_dict.items()を使用する
+    date_id_dict = scraping.get_race_date_list(
+      f'({datetime.now().year}-{datetime.now().month})', f'({datetime.now().year}-{datetime.now().month})', cs=cs
+    )
     loop_target = date_id_dict.items()
+
   else:
-    with open(os.path.join(local_paths.DATES_DIR, f'race_date_list_{datetime.now().year}.pickle'), 'rb') as f:
-      race_date_list = pickle.load(f)
-    # race_date_listをそのまま使用する
+    race_date_list = scraping.get_race_date_list(
+      f'({datetime.now().year}-{datetime.now().month})', f'({datetime.now().year}-{datetime.now().month})', cs=cs
+    )
     loop_target = race_date_list
 
   for race_date in loop_target:

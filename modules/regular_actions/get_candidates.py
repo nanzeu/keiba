@@ -8,15 +8,17 @@ import os
 
 
 def save_data(cs: bool = False):
+  # 今月の開催日を取得
   if cs:
-    with open(os.path.join(local_paths.DATES_DIR, f'date_id_dict_{datetime.now().year}.pickle'), 'rb') as f:
-      date_id_dict = pickle.load(f)
-    # date_id_dict.items()を使用する
+    date_id_dict = scraping.get_race_date_list(
+      f'({datetime.now().year}-{datetime.now().month})', f'({datetime.now().year}-{datetime.now().month})', cs=cs
+    )
     loop_target = date_id_dict.items()
+
   else:
-    with open(os.path.join(local_paths.DATES_DIR, f'race_date_list_{datetime.now().year}.pickle'), 'rb') as f:
-      race_date_list = pickle.load(f)
-    # race_date_listをそのまま使用する
+    race_date_list = scraping.get_race_date_list(
+      f'({datetime.now().year}-{datetime.now().month})', f'({datetime.now().year}-{datetime.now().month})', cs=cs
+    )
     loop_target = race_date_list
 
   for race_date in loop_target:
