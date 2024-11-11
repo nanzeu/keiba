@@ -23,7 +23,7 @@ jobs:
 
       - name: Set PYTHONPATH
         run: |
-          echo "PYTHONPATH=${env:PYTHONPATH};${env:GITHUB_WORKSPACE}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf
+          echo "PYTHONPATH=${env:PYTHONPATH};${env:GITHUB_WORKSPACE}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
       - name: Cache data files
         uses: actions/cache@v3
