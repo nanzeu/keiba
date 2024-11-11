@@ -29,14 +29,11 @@ jobs:
         run: |
           mkdir -p data/html/candidates
 
-      - name: Set cache date key
-        run: echo "CACHE_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
-
       - name: Cache data files
         uses: actions/cache@v3
         with:
           path: data/candidates/
-          key: ${{ runner.os }}-candidates-${{ env.CACHE_DATE }}
+          key: ${{ runner.os }}-candidates-${{ github.run_number }}
           restore-keys: |
             ${{ runner.os }}-candidates-
 
