@@ -2,7 +2,7 @@ import re
 from tqdm import tqdm
 import datetime
 from bs4 import BeautifulSoup
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 import time
 import os
 from modules.constants import local_paths
@@ -30,7 +30,8 @@ def get_race_date_list(start: str, end: str, cs: bool = False) -> list[str]:
       else:
         url = f'https://race.netkeiba.com/top/calendar.html?year={year}&month={month}'
 
-      html = urlopen(url)
+      req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+      html = urlopen(req).read()
       soup = BeautifulSoup(html, "html.parser")
 
       time.sleep(1)
