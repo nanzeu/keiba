@@ -137,7 +137,7 @@ def predict_data(cs: bool = False):
           en_xgb_basemodel = pickle.load(f)
         with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_metamodel_cs.pickle'), 'rb') as f:
           en_xgb_metamodel = pickle.load(f)
-          
+
         with open(os.path.join(local_paths.MODELS_DIR, 'en_rf_basemodel_cs_features.pickle'), 'rb') as f:
           en_rf_basemodel_features = pickle.load(f)
         en_nn_basemodel_features= load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs_features.joblib'))
@@ -185,13 +185,13 @@ def predict_data(cs: bool = False):
         full_save_name = f'pred_candidates_full_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}.csv'
         save_name = f'pred_candidates_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}.csv'
 
-        # pred_dfをルートに保存
-        pred_df.to_csv(
-          full_save_name, sep="\t", encoding='utf-8'
-        )
-        pred_df[(pred_df['bet_sum'] > 0)].to_csv(
-          save_name, sep="\t", encoding='utf-8'
-        )
+      # pred_dfをルートに保存
+      pred_df.to_csv(
+        full_save_name, sep="\t", encoding='utf-8'
+      )
+      pred_df[(pred_df['bet_sum'] > 0)].to_csv(
+        save_name, sep="\t", encoding='utf-8'
+      )
 
 def predict_candidates():
   predict_data()
