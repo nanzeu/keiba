@@ -27,7 +27,7 @@ jobs:
 
       - name: initialize html/candidates
         run: |
-          mkdir -p data/html/candidates
+          mkdir -p data/html/candidates/cs
 
       - name: Cache data files
         uses: actions/cache@v3
@@ -44,4 +44,4 @@ jobs:
       - name: cleanup
         if: always()
         run: |
-          Remove-Item -Recurse -Force data/html/candidates
+          Remove-Item -Recurse -Force data/html/candidates/cs
