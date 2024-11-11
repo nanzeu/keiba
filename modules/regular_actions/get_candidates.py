@@ -1,4 +1,4 @@
-from modules import preapre_new_data, scraping, prepare_html, prepare_rawdata, preprocessing
+from modules import prepare_new_data, scraping, prepare_html, prepare_rawdata, preprocessing
 from modules.constants import local_paths 
 
 from datetime import datetime, timedelta
@@ -32,10 +32,10 @@ def save_data(cs: bool = False):
         race_id_list = scraping.get_race_id_list(race_date_list=None, date_id_dict={race_date: id} ,cs=cs)
       else:
         race_id_list = scraping.get_race_id_list(race_date_list=[race_date], date_id_dict=None, cs=cs)
-      html_paths_candidates = preapre_new_data.get_html_candidates(race_id_list, cs=cs)
-      candidates = preapre_new_data.create_candidates(html_paths_candidates, cs=cs)
-      preapre_new_data.create_candidates_info(html_paths_candidates, cs=cs)
-      preapre_new_data.process_candidates(cs=cs)
+      html_paths_candidates = prepare_new_data.get_html_candidates(race_id_list, cs=cs)
+      candidates = prepare_new_data.create_candidates(html_paths_candidates, cs=cs)
+      prepare_new_data.create_candidates_info(html_paths_candidates, cs=cs)
+      prepare_new_data.process_candidates(cs=cs)
 
       if cs:
         save_dir = local_paths.CANDIDATES_CS_DIR
