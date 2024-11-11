@@ -15,13 +15,13 @@ def predict_data(cs: bool = False):
   # 今月の開催日を取得
   if cs:
     date_id_dict = scraping.get_race_date_list(
-      f'({datetime.now().year}-{datetime.now().month})', f'({datetime.now().year}-{datetime.now().month})', cs=cs
+      f'{datetime.now().year}-{datetime.now().month}', f'{datetime.now().year}-{datetime.now().month}', cs=cs
     )
     loop_target = date_id_dict.items()
 
   else:
     race_date_list = scraping.get_race_date_list(
-      f'({datetime.now().year}-{datetime.now().month})', f'({datetime.now().year}-{datetime.now().month})', cs=cs
+      f'{datetime.now().year}-{datetime.now().month}', f'{datetime.now().year}-{datetime.now().month}', cs=cs
     )
     loop_target = race_date_list
 
