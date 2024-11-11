@@ -197,3 +197,4 @@ def predict_candidates():
   
 
 if __name__ == '__main__':
+  predict_candidates()
