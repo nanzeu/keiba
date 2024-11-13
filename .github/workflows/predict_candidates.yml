@@ -46,20 +46,27 @@ jobs:
             pred_candidates_*.csv
 
 
-  download_and_extract:
+  download_candidates:
     runs-on: windows-latest
-    needs: predict_candidates  # 予測ジョブの完了を待つ
+    needs: predict_candidates
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Download artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: pred_df-candidates
-          path: pred_df-candidates  # カレントディレクトリにダウンロード
-
-      - name: List downloaded files
+      - name: Install GitHub CLI
         run: |
-          dir pred_df-candidates
+          Invoke-WebRequest -Uri https://github.com/cli/cli/releases/download/v2.31.0/gh_2.31.0_windows_amd64.msi -OutFile gh-cli.msi
+          Start-Process msiexec.exe -Wait -ArgumentList '/I gh-cli.msi /quiet /norestart'
+
+      - name: Authenticate GitHub CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo $env:GITHUB_TOKEN | gh auth login --with-token
+
+      - name: Download latest artifact
+        run: |
+          mkdir downloaded_artifacts
+          gh run download --repo ${{ github.repository }} --name pred_df-candidates --dir downloaded_artifacts
 
