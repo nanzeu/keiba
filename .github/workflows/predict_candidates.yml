@@ -59,14 +59,9 @@ jobs:
           Invoke-WebRequest -Uri https://github.com/cli/cli/releases/download/v2.31.0/gh_2.31.0_windows_amd64.msi -OutFile gh-cli.msi
           Start-Process msiexec.exe -Wait -ArgumentList '/I gh-cli.msi /quiet /norestart'
 
-      - name: Authenticate GitHub CLI
+      - name: Download latest artifact to local path
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo $env:GITHUB_TOKEN | gh auth login --with-token
-
-      - name: Download latest artifact
-        run: |
-          mkdir downloaded_artifacts
-          gh run download --repo ${{ github.repository }} --name pred_df-candidates --dir downloaded_artifacts
+          gh run download --repo ${{ github.repository }} --name pred_df-candidates --dir "C:\Users\SV8\m\p\keiba" --token $env:GITHUB_TOKEN
 
