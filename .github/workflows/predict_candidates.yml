@@ -46,7 +46,6 @@ jobs:
             pred_candidates_*.csv
 
 
-  # アーティファクトをダウンロードして解凍する別のジョブ
   download_and_extract:
     runs-on: windows-latest
     needs: predict_candidates  # 予測ジョブの完了を待つ
@@ -58,9 +57,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: pred_df-candidates
-          path: .  # カレントディレクトリにダウンロード
+          path: pred_df-candidates  # カレントディレクトリにダウンロード
 
-      - name: Extract artifact
+      - name: List downloaded files
         run: |
-          Expand-Archive -Path pred_df-candidates.zip -DestinationPath . -Force
+          dir pred_df-candidates
 
