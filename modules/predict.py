@@ -166,6 +166,7 @@ class PredBase:
 
         df_add_returns = df_add_returns[df_add_returns['bet_sum'] <= self.max_bet]
 
+
       else:
         if len(correct) == rank_threshold:
           returns_value = race_group[f'{bet_type_return}_returns'].iloc[0].replace("'", '').replace("[", '').replace("]", '')
@@ -230,6 +231,7 @@ class PredBase:
       return df_add_returns[['race_id', 'returns', 'bet_sum']].drop_duplicates()
     else:
       return df_add_returns[['race_id', 'bet_sum']].drop_duplicates()
+    
     
 
 
@@ -473,7 +475,7 @@ class RFModel(PredBase):
 
     # targetの設定とラベルエンコーディング、不要なカラムの処理
     df_p = self.preprocess_df(df)
-    df_x = self.drop_columns(df_p)
+    df_x = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
     if self.select_features:
       # 特徴量重要度を取得し、上位30個の特徴量を選択
@@ -1115,6 +1117,7 @@ class EnsembleModel(PredBase):
       save_name = f'en_{self.final_model}_metamodel_cs'
 
     meta_model = self.models_instance(meta_train, self.final_model, model=None, save_name=save_name)
+    
     if self.select_features:
       meta_models_features[self.final_model] = meta_model.selected_features
     meta_models[self.final_model] = meta_model.model
@@ -1167,8 +1170,6 @@ class EnsembleModel(PredBase):
     df_p = self.preprocess_df(df, encoding=False)
     df_x = self.drop_columns(df_p)
 
-    print('predict_dataframe', df_x)
-
     meta_data = df_x.copy()
 
     # ベースモデルの予測
@@ -1180,8 +1181,6 @@ class EnsembleModel(PredBase):
       meta_data[f'predicted_proba_{key}'] = test_pred['predicted_proba']
       meta_data[f'predicted_target_{key}'] = test_pred['predicted_target']
 
-    print(meta_data)
-  
     # メタモデルの予測
     meta_model = self.models_instance(
       meta_data, self.final_model, selected_features=\
