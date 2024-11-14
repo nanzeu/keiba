@@ -206,18 +206,18 @@ def create_candidates_info(
 
         df['date'] = date
 
-        def get_season(month):
-          if month in [3, 4, 5]:
-              return 0
-          elif month in [6, 7, 8]:
-              return 1
-          elif month in [9, 10, 11]:
-              return 2
-          else:
-              return 3
+        # def get_season(month):
+        #   if month in [3, 4, 5]:
+        #       return 0
+        #   elif month in [6, 7, 8]:
+        #       return 1
+        #   elif month in [9, 10, 11]:
+        #       return 2
+        #   else:
+        #       return 3
 
-        # 'month' 列に基づいて 'season' 列を追加
-        df['season'] = df['date'].dt.month.apply(get_season)
+        # # 'month' 列に基づいて 'season' 列を追加
+        # df['season'] = df['date'].dt.month.apply(get_season)
 
       except IndexError as e:
         print(f"table not found at {race_id}")
