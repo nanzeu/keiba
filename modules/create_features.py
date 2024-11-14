@@ -155,7 +155,7 @@ class Horse:
 
     # # カラムをフラット化
     # seasonal_rates = flatten_columns(seasonal_rates, '')
-    # features = flatten_columns(features, '')
+    features = flatten_columns(features, '')
 
     # # 特徴量を統合
     # features = features.merge(seasonal_rates, on=['horse_id', 'reference_date'], how='left')
