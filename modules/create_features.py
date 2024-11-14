@@ -87,7 +87,26 @@ class Horse:
   def create_features(self):
     """過去の結果データを基に特徴量を作成"""
     past_horse_results = self.filter()
-    
+
+    past_horse_results['date'] = pd.to_datetime(past_horse_results['date'])
+    past_horse_results['reference_date'] = pd.to_datetime(past_horse_results['reference_date'])
+
+    past_horse_results['month'] = past_horse_results['date'].dt.month
+
+    # 季節を分類する関数を定義
+    def get_season(month):
+        if month in [3, 4, 5]:
+            return 'spring'
+        elif month in [6, 7, 8]:
+            return 'summer'
+        elif month in [9, 10, 11]:
+            return 'autumn'
+        else:
+            return 'winter'
+
+    # 'month' 列に基づいて 'season' 列を追加
+    past_horse_results['season'] = past_horse_results['month'].apply(get_season)
+
     # 直近2, 5回分のデータの追加
     past_2_results = past_horse_results.sort_values('date')\
       .groupby(['horse_id', 'reference_date']).apply(lambda x: x.tail(2)).reset_index(drop=True)
@@ -111,13 +130,36 @@ class Horse:
     features_past_2 = past_2_results.groupby(['horse_id', 'reference_date']).agg(aggregation_config).reset_index()
     features_past_5 = past_5_results.groupby(['horse_id', 'reference_date']).agg(aggregation_config).reset_index()
 
-    # カラム名をフラット化
+     # カラム名をフラット化
     def flatten_columns(df, suffix):
         df.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in df.columns]
         df.rename(columns={'horse_id_': 'horse_id', 'reference_date_': 'reference_date'}, inplace=True)
         return df
 
+
+    # シーズンごとの勝率、連対率、複勝率を計算
+    def calculate_rates(df):
+      total_races = len(df)
+      if total_races == 0:
+          return pd.Series([0, 0, 0], index=['win_rate', 'place_rate', 'show_rate'])
+      win_rate = (df['rank'] == 1).sum() / total_races
+      place_rate = (df['rank'] <= 2).sum() / total_races
+      show_rate = (df['rank'] <= 3).sum() / total_races
+      return pd.Series([win_rate, place_rate, show_rate], index=['win_rate', 'place_rate', 'show_rate'])
+
+    # 各シーズンごとに勝率、連対率、複勝率を計算し、特徴量として追加
+    seasonal_rates = past_horse_results.groupby(['horse_id', 'reference_date', 'season']).apply(calculate_rates)
+
+    # unstack操作
+    seasonal_rates = seasonal_rates.unstack().reset_index()
+
+    # カラムをフラット化
+    seasonal_rates = flatten_columns(seasonal_rates, '')
     features = flatten_columns(features, '')
+
+    # 特徴量を統合
+    features = features.merge(seasonal_rates, on=['horse_id', 'reference_date'], how='left')
+   
     features_past_2 = flatten_columns(features_past_2, '_past_2')
     features_past_5 = flatten_columns(features_past_5, '_past_5')
 
@@ -215,10 +257,17 @@ class Horse:
     features['days_since_last_race'] = (features['reference_date'] - features['last_race_date']).dt.days
     features['race_interval_category'] = pd.cut(features['days_since_last_race'], bins=[0, 2, 30, 90, float('inf')], labels=[0, 1, 2, 3])
     
+    
     features.drop(columns=[
       'course_len', 'course_len_x', 'course_len_y', 'last_race_date', 'date_max',
       'time_mean', 'date_max_past_5', 'time_mean_past_5', 'date_max_past_2', 'time_mean_past_2'
     ], inplace=True, errors='ignore')
+
+    # 季節のキーワードを含むカラムを選択
+    season_columns = features.columns[features.columns.str.contains('spring|summer|autumn|winter')]
+
+    # 選択したカラムに対して fillna(0) を適用
+    features[season_columns] = features[season_columns].fillna(0)
 
     # peds_dfがある場合の処理
     if self.peds_df is not None and not self.peds_df.empty:

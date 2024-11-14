@@ -216,6 +216,19 @@ def process_race_info(
   df_p['place'] = df_p['place'].str.extract(r'\d回(.*?)\d日目')
   df_p['place'] = df_p['place'].map(place_mapping)
 
+  def get_season(month):
+    if month in [3, 4, 5]:
+        return 0
+    elif month in [6, 7, 8]:
+        return 1
+    elif month in [9, 10, 11]:
+        return 2
+    else:
+        return 3
+
+  # 'month' 列に基づいて 'season' 列を追加
+  df_p['season'] = df_p['month'].apply(get_season)
+
   df_p.to_csv(os.path.join(output_dir, save_file_name), sep="\t")
 
   return df_p

@@ -63,5 +63,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh run download --repo ${{ github.repository }} --name pred_df-candidates --dir "C:\Users\SV8\m\p\keiba" --token $env:GITHUB_TOKEN
+          gh run download --repo ${{ github.repository }} --name pred_df-candidates --dir "C:\Users\SV8\m\p\keiba" $env:GITHUB_TOKEN
 
