@@ -46,7 +46,6 @@ jobs:
             pred_candidates_*.csv
 
             
-
   download_candidates:
     runs-on: windows-latest
     needs: predict_candidates
@@ -54,11 +53,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up GitHub CLI
-        uses: crazy-max/gh-action@v2
+      - name: Install GitHub CLI
+        run: |
+          Invoke-WebRequest -Uri https://github.com/cli/cli/releases/download/v2.31.0/gh_2.31.0_windows_amd64.msi -OutFile gh-cli.msi
+          Start-Process msiexec.exe -Wait -ArgumentList '/I gh-cli.msi /quiet /norestart'
 
       - name: Download latest artifact to local path
         run: |
-          gh run list --repo ${{ github.repository }} --limit 1 --json headSha -q ".[0].headSha" > sha.txt
-          set /p SHA=<sha.txt
-          gh run download $SHA --repo ${{ github.repository }} --name pred_df-candidates --dir "C:\Users\SV8\m\p\keiba"
+          gh run download --repo ${{ github.repository }} --name pred_df-candidates --dir "C:\Users\SV8\m\p\keiba"
