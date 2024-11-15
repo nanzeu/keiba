@@ -39,7 +39,7 @@ def save_data(cs: bool = False):
         filtered_list = [item for item in race_id_list if not skip_pattern.match(item)]
 
         if len(filtered_list) == 0:
-          raise Exception
+          raise ValueError(f"Not found target candidates-cs at {race_date}")
 
         html_paths_candidates = prepare_new_data.get_html_candidates(race_id_list, cs=cs)
         candidates = prepare_new_data.create_candidates(html_paths_candidates, cs=cs)
@@ -67,8 +67,7 @@ def save_data(cs: bool = False):
         continue
 
     except:
-      print(f"Not found target candidates at {race_date} ")
-      pass
+      continue
     
 
 def get_candidates():
