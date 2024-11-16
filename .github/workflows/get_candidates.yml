@@ -48,7 +48,7 @@ jobs:
 
       - name: Run script
         run: |
-          python modules/regular_actions/get_candidates.py
+          python modules/regular_actions/get_candidates.py | python modules/regular_actions/predict_candidates.py
 
       - name: cleanup
         if: always()

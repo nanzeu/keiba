@@ -44,6 +44,7 @@ jobs:
           path: |
             pred_candidates_full_*.csv
             pred_candidates_*.csv
+            
 
   download_candidates:
     runs-on: windows-latest
