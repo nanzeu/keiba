@@ -44,6 +44,8 @@ def get_html_candidates(
   if cs:
     save_dir = os.path.join(save_dir, "cs")
 
+  os.makedirs(save_dir, exist_ok=True)
+
   html_path_list = []
   for race_id in tqdm(race_id_list):
     filepath = os.path.join(save_dir, f"{race_id}.bin")
