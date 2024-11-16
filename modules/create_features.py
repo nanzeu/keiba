@@ -91,21 +91,21 @@ class Horse:
     past_horse_results['date'] = pd.to_datetime(past_horse_results['date'])
     past_horse_results['reference_date'] = pd.to_datetime(past_horse_results['reference_date'])
 
-    past_horse_results['month'] = past_horse_results['date'].dt.month
+    # past_horse_results['month'] = past_horse_results['date'].dt.month
 
-    # 季節を分類する関数を定義
-    def get_season(month):
-        if month in [3, 4, 5]:
-            return 'spring'
-        elif month in [6, 7, 8]:
-            return 'summer'
-        elif month in [9, 10, 11]:
-            return 'autumn'
-        else:
-            return 'winter'
+    # # 季節を分類する関数を定義
+    # def get_season(month):
+    #     if month in [3, 4, 5]:
+    #         return 'spring'
+    #     elif month in [6, 7, 8]:
+    #         return 'summer'
+    #     elif month in [9, 10, 11]:
+    #         return 'autumn'
+    #     else:
+    #         return 'winter'
 
-    # 'month' 列に基づいて 'season' 列を追加
-    past_horse_results['season'] = past_horse_results['month'].apply(get_season)
+    # # 'month' 列に基づいて 'season' 列を追加
+    # past_horse_results['season'] = past_horse_results['month'].apply(get_season)
 
     # 直近2, 5回分のデータの追加
     past_2_results = past_horse_results.sort_values('date')\
