@@ -34,7 +34,7 @@ jobs:
         run: |
           echo "PYTHONPATH=${env:PYTHONPATH};${env:GITHUB_WORKSPACE}" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8
 
-      - name: initialize html/candidates
+      - name: initialize html/candidates/cs
         run: |
           mkdir -p data/html/candidates/cs
 
@@ -48,7 +48,7 @@ jobs:
 
       - name: Run script
         run: |
-          python modules/regular_actions/get_candidates.py | python modules/regular_actions/predict_candidates.py
+          python modules/regular_actions/get_candidates.py
 
       - name: cleanup
         if: always()
