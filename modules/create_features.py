@@ -138,27 +138,27 @@ class Horse:
 
 
     # シーズンごとの勝率、連対率、複勝率を計算
-    def calculate_rates(df):
-      total_races = len(df)
-      if total_races == 0:
-          return pd.Series([0, 0, 0], index=['win_rate', 'place_rate', 'show_rate'])
-      win_rate = (df['rank'] == 1).sum() / total_races
-      place_rate = (df['rank'] <= 2).sum() / total_races
-      show_rate = (df['rank'] <= 3).sum() / total_races
-      return pd.Series([win_rate, place_rate, show_rate], index=['win_rate', 'place_rate', 'show_rate'])
+    # def calculate_rates(df):
+    #   total_races = len(df)
+    #   if total_races == 0:
+    #       return pd.Series([0, 0, 0], index=['win_rate', 'place_rate', 'show_rate'])
+    #   win_rate = (df['rank'] == 1).sum() / total_races
+    #   place_rate = (df['rank'] <= 2).sum() / total_races
+    #   show_rate = (df['rank'] <= 3).sum() / total_races
+    #   return pd.Series([win_rate, place_rate, show_rate], index=['win_rate', 'place_rate', 'show_rate'])
 
-    # 各シーズンごとに勝率、連対率、複勝率を計算し、特徴量として追加
-    seasonal_rates = past_horse_results.groupby(['horse_id', 'reference_date', 'season']).apply(calculate_rates)
+    # # 各シーズンごとに勝率、連対率、複勝率を計算し、特徴量として追加
+    # seasonal_rates = past_horse_results.groupby(['horse_id', 'reference_date', 'season']).apply(calculate_rates)
 
-    # unstack操作
-    seasonal_rates = seasonal_rates.unstack().reset_index()
+    # # unstack操作
+    # seasonal_rates = seasonal_rates.unstack().reset_index()
 
-    # カラムをフラット化
-    seasonal_rates = flatten_columns(seasonal_rates, '')
+    # # カラムをフラット化
+    # seasonal_rates = flatten_columns(seasonal_rates, '')
     features = flatten_columns(features, '')
 
     # # 特徴量を統合
-    features = features.merge(seasonal_rates, on=['horse_id', 'reference_date'], how='left')
+    # features = features.merge(seasonal_rates, on=['horse_id', 'reference_date'], how='left')
    
     features_past_2 = flatten_columns(features_past_2, '_past_2')
     features_past_5 = flatten_columns(features_past_5, '_past_5')
