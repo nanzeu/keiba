@@ -62,11 +62,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh auth setup-git
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
           gh auth status
 
       - name: Download latest artifact to local path
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh run download --repo ${{ github.repository }} --name pred_df-candidates --dir "C:\Users\SV8\m\p\keiba"
