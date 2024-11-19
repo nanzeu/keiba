@@ -86,7 +86,7 @@ def predict_data(cs: bool = False):
         if not cs:
           # 新たにモデルを初期化
           torch.serialization.add_safe_globals([Net])
-          en_nn_basemodel = Net(input_size=30)
+          en_nn_basemodel = Net(input_size=60)
 
           # 保存されたモデル、重みを読み込み
           en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel.pth')))
@@ -97,8 +97,8 @@ def predict_data(cs: bool = False):
             en_lgb_basemodel = pickle.load(f)
           with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_basemodel.pickle'), 'rb') as f:
             en_xgb_basemodel = pickle.load(f)
-          with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_metamodel.pickle'), 'rb') as f:
-            en_lgb_metamodel = pickle.load(f)
+          with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_metamodel.pickle'), 'rb') as f:
+            en_xgb_metamodel = pickle.load(f)
           with open(os.path.join(local_paths.MODELS_DIR, 'en_rf_basemodel_features.pickle'), 'rb') as f:
             en_rf_basemodel_features = pickle.load(f)
           en_nn_basemodel_features= load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_features.joblib'))
@@ -106,14 +106,14 @@ def predict_data(cs: bool = False):
             en_lgb_basemodel_features = pickle.load(f)
           with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_basemodel_features.pickle'), 'rb') as f:
             en_xgb_basemodel_features = pickle.load(f)
-          with open(os.path.join(local_paths.MODELS_DIR, 'en_lgb_metamodel_features.pickle'), 'rb') as f:
-            en_lgb_metamodel_features = pickle.load(f)
+          with open(os.path.join(local_paths.MODELS_DIR, 'en_xgb_metamodel_features.pickle'), 'rb') as f:
+            en_xgb_metamodel_features = pickle.load(f)
 
           base_models = {'rf': en_rf_basemodel, 'nn': en_nn_basemodel, 'lgb': en_lgb_basemodel, 'xgb': en_xgb_basemodel}
           base_models_features = {'rf': en_rf_basemodel_features, 'nn': en_nn_basemodel_features, 
                                   'lgb': en_lgb_basemodel_features, 'xgb': en_xgb_basemodel_features}
-          meta_models = {'lgb': en_lgb_metamodel}
-          meta_models_features = {'lgb': en_lgb_metamodel_features}
+          meta_models = {'xgb': en_xgb_metamodel}
+          meta_models_features = {'xgb': en_xgb_metamodel_features}
 
           # 予想
           en = predict.EnsembleModel(
@@ -193,6 +193,7 @@ def predict_data(cs: bool = False):
         pred_df[(pred_df['bet_sum'] > 0)].to_csv(
           save_name, sep="\t", encoding='utf-8'
         )
+
       except:
         print(f'Not found target candidates-cs {race_date}')
         continue

@@ -38,7 +38,7 @@ jobs:
           python modules/regular_actions/predict_candidates.py
 
       - name: save pred_df for artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pred_df-candidates
           path: |

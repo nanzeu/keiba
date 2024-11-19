@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import re
 
+
+
 def save_data(cs: bool = False):
   # 今月の開催日を取得
   if cs:
@@ -31,15 +33,17 @@ def save_data(cs: bool = False):
         # candidates、candidates_infoとして保存し前処理する。
         if cs:
           race_id_list = scraping.get_race_id_list(race_date_list=None, date_id_dict={race_date: id} ,cs=cs)
+
+          # スキップ対象の開催場所のみの場合処理を終了
+          skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
+          filtered_list = [item for item in race_id_list if not skip_pattern.match(item)]
+
+          if len(filtered_list) == 0:
+            raise ValueError
         else:
           race_id_list = scraping.get_race_id_list(race_date_list=[race_date], date_id_dict=None, cs=cs)
 
-        # スキップ対象の開催場所のみの場合処理を終了
-        skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
-        filtered_list = [item for item in race_id_list if not skip_pattern.match(item)]
 
-        if len(filtered_list) == 0:
-          raise ValueError
 
         html_paths_candidates = prepare_new_data.get_html_candidates(race_id_list, cs=cs)
         candidates = prepare_new_data.create_candidates(html_paths_candidates, cs=cs)
