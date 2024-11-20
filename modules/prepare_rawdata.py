@@ -90,7 +90,7 @@ def process_html_file(html_path: str) -> pd.DataFrame:
     with open(html_path, "rb") as f:
       horse_id = re.search(r'\d{10}', html_path).group()
       html = f.read()
-      df = pd.read_html(html)[3]
+      df = pd.read_html(html)[2]
       df['horse_id'] = horse_id  # horse_id列を追加
       return df
   except (IndexError, ValueError) as e:
