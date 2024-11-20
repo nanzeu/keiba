@@ -207,6 +207,8 @@ def create_candidates_info(
             df['around'] = df['around'].map(around_mapping)
 
         df['date'] = date
+        df['date'] = pd.to_datetime(df['date'])
+
 
         def get_season(month):
           if month in [3, 4, 5]:
