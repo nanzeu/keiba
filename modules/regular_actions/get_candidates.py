@@ -39,7 +39,8 @@ def save_data(cs: bool = False):
 
         if len(filtered_list) == 0:
           print(f'Not found candidates-cs {race_date}')
-          continue
+          break
+
       else:
         race_id_list = scraping.get_race_id_list(race_date_list=[race_date], date_id_dict=None, cs=cs)
 
