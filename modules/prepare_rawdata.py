@@ -219,6 +219,7 @@ def process_html_path(html_path: str) -> pd.DataFrame:
   except (IndexError, ValueError, AttributeError) as e:
     print(f"table not found at {html_path}: {e}")
     return None
+  
 
 
 def create_returns(

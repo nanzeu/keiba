@@ -122,7 +122,7 @@ def predict_data(cs: bool = False):
         )
 
       else:
-      # 新たにモデルを初期化
+        # 新たにモデルを初期化
         torch.serialization.add_safe_globals([Net])
         en_nn_basemodel = Net(input_size=50)
 
@@ -161,6 +161,7 @@ def predict_data(cs: bool = False):
           base_models=base_models, meta_models=meta_models, base_models_features=base_models_features, meta_models_features=meta_models_features, 
         )
 
+      
       pred = en.predict_target(features)
       pred_bet = en.calc_results(pred, per_race=False, bet_only=True)
 
