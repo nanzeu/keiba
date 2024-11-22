@@ -117,7 +117,7 @@ def predict_data(cs: bool = False):
         # 予想
         en = predict.EnsembleModel(
           train_df=None, returns_df=None, bet_type='sanrenpuku', threshold=0.6, 
-          max_bet=800, pivot_horse=True, select_num=30, final_model='lgb', save=False,
+          max_bet=800, pivot_horse=True, select_num=30, final_model='xgb', save=False,
           base_models=base_models, meta_models=meta_models, base_models_features=base_models_features, meta_models_features=meta_models_features, 
         )
 
