@@ -124,7 +124,7 @@ def predict_data(cs: bool = False):
       else:
         # 新たにモデルを初期化
         torch.serialization.add_safe_globals([Net])
-        en_nn_basemodel = Net(input_size=50)
+        en_nn_basemodel = Net(input_size=60)
 
         # 保存されたモデル、重みを読み込み
         en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs.pth')))
