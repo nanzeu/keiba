@@ -1,7 +1,7 @@
 venv/
 
 data/features*/
-data/completed_data/
+data/completed_data*/
 data/preprocessed*/
 data/raw*/
 

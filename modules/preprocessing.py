@@ -216,6 +216,8 @@ def process_race_info(
   df_p['place'] = df_p['place'].str.extract(r'\d回(.*?)\d日目')
   df_p['place'] = df_p['place'].map(place_mapping)
 
+  df_p['month'] = df_p['date'].dt.month
+ 
   def get_season(month):
     if month in [3, 4, 5]:
         return 0
