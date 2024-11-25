@@ -1,0 +1,46 @@
+name: Google Drive Upload Test
+
+on:
+  workflow_dispatch:  # 手動でワークフローをトリガー
+
+jobs:
+  test_google_drive_upload:
+    runs-on: ubuntu-latest  # Windows でも可
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          pip install pydrive2
+
+      - name: Run Google Drive upload test
+        env:
+          GDRIVE_CREDENTIALS_JSON: ${{ secrets.GDRIVE_CREDENTIALS_JSON }}
+        run: |
+          python - <<EOF
+          from pydrive2.auth import GoogleAuth
+          from pydrive2.drive import GoogleDrive
+          import os
+
+          # 認証情報のロード
+          with open("credentials.json", "w") as f:
+              f.write(os.environ["GDRIVE_CREDENTIALS_JSON"])
+
+          gauth = GoogleAuth()
+          gauth.LoadCredentialsFile("credentials.json")
+          drive = GoogleDrive(gauth)
+
+          # テストファイルアップロード
+          test_file = drive.CreateFile({"title": "test_upload.txt"})
+          test_file.SetContentString("This is a test upload from GitHub Actions.")
+          test_file.Upload()
+
+          print("Test upload successful!")
+          EOF
