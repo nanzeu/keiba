@@ -175,6 +175,7 @@ def create_candidates_info(
         span_list = soup.find_all('span')
         div_list = soup.find_all('div', class_="RaceData01")
 
+        place_set = False  # place を設定済みかを管理
         for span in span_list:
           type_len = re.search(r'(ダ|芝)(\d+)', span.text)
 
@@ -190,9 +191,11 @@ def create_candidates_info(
             df['race_type'] = df['race_type'].map(race_type_mapping)
             df['course_len'] = type_len_re.group(2).split()
           
-          if place:
+          if place and not place_set:
+            # 最初に一致した place のみを設定
             df['place'] = place.group()
             df['place'] = df['place'].map(place_mapping)
+            place_set = True  # place を設定済みとマーク
 
           if race_class and not cs:
             df['race_class'] = race_class.group()

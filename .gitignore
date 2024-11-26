@@ -1,7 +1,8 @@
 venv/
 
 data/features*/
-data/completed_data*/
+data/completed_data/
+data/completed_data_cs/
 data/preprocessed*/
 data/raw*/
 
@@ -11,3 +12,5 @@ data/html/*
 document/
 
 pred_df-candidates*/
+
+download_artifacts.ps1
