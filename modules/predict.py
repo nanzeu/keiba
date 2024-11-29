@@ -575,6 +575,8 @@ class NNModel(PredBase):
     df_p = self.preprocess_df(df)
     df_d = self.drop_columns(df_p).drop(['race_id'], axis=1)
 
+    df_d = df_d.drop(['horse_id', 'jockey_id', 'trainer_id'], axis=1, errors='ignore')
+
     X = df_d.drop(['target'], axis=1)
     y = df_d['target']
 
@@ -656,6 +658,7 @@ class NNModel(PredBase):
     # 新しいデータに同様の前処理を行う
     df_p = self.preprocess_df(df)
     df_x = self.drop_columns(df_p).drop(['race_id'], axis=1)
+    df_x = df_x.drop(['horse_id', 'jockey_id', 'trainer_id'], axis=1, errors='ignore')
 
     # データ正規化 (標準化)
     self.scaler.fit(df_x)
