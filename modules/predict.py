@@ -51,12 +51,16 @@ class PredBase:
     
       # 対象のカラム
     if encoding:
-      columns_to_encode = ['horse_id', 'jockey_id', 'trainer_id']
+      columns_to_encode = ['race_id', 'horse_id', 'jockey_id', 'trainer_id']
 
       # 各カラムごとにLabelEncoderを適用
       for column in columns_to_encode:
-        le = LabelEncoder()  # LabelEncoderのインスタンスを作成
-        df_d[column] = le.fit_transform(df_d[column])  # カラムにエンコードを適用
+        if column != 'race_id':
+          le = LabelEncoder()  # LabelEncoderのインスタンスを作成
+          df_d[column] = le.fit_transform(df_d[column])  # カラムにエンコードを適用
+        else:
+          le = LabelEncoder()  # LabelEncoderのインスタンスを作成
+          df_d['race_id_encoded'] = le.fit_transform(df_d[column])  # カラムにエンコードを適用
 
     return df_d
   
