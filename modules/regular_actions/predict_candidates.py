@@ -12,18 +12,20 @@ from datetime import datetime, timedelta
 
 
 def predict_data(cs: bool = False):
-  # 今月の開催日を取得
+  # 今月＆来月の開催日を取得
+  # 現在の月の次の月を計算
+  current_date = datetime.now()
+  next_month_date = (current_date.replace(day=1) + timedelta(days=31)).replace(day=1)
   if cs:
     _, date_id_dict = scraping.get_race_date_list(
-      f'{datetime.now().year}-{datetime.now().month}', f'{datetime.now().year}-{datetime.now().month}', cs=cs
+      f'{current_date.year}-{current_date.month}', f'{next_month_date.year}-{next_month_date.month}', cs=cs
     )
     loop_target = date_id_dict.items()
 
   else:
     race_date_list, _ = scraping.get_race_date_list(
-      f'{datetime.now().year}-{datetime.now().month}', f'{datetime.now().year}-{datetime.now().month}', cs=cs
+      f'{current_date.year}-{current_date.month}', f'{next_month_date.year}-{next_month_date.month}', cs=cs
     )
-
     loop_target = race_date_list
 
   for race_date in loop_target:
