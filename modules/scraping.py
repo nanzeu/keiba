@@ -1,6 +1,6 @@
 import re
 from tqdm import tqdm
-import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from urllib.request import urlopen, Request
 import time
@@ -14,47 +14,69 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 
 def get_race_date_list(start: str, end: str, cs: bool = False) -> list[str]:
-  dstart = datetime.datetime.strptime(start, '%Y-%m')
-  dend = datetime.datetime.strptime(end, '%Y-%m')
-  start_year = dstart.year
-  end_year = dend.year
-  start_month = dstart.month
-  end_month = dend.month
+  import re
+from tqdm import tqdm
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+from urllib.request import urlopen, Request
+import time
+import os
 
+def get_race_date_list(start: str, end: str, cs: bool = False) -> list[str]:
+  # 年月を分解
+  start_year, start_month = map(int, start.split('-'))
+  end_year, end_month = map(int, end.split('-'))
+
+  # 開始日と終了日を datetime オブジェクトに変換
+  start_date = datetime(start_year, start_month, 1)
+  end_date = datetime(end_year, end_month, 1)
+
+  # ループ
   race_date_list = []
   date_id_dict = {}
-  for year in range(start_year, end_year+1):
-    for month in tqdm(range(start_month, end_month+1)):
+
+  current_date = start_date
+  while current_date <= end_date:
+    year = current_date.year
+    month = current_date.month
+
+    if cs:
+      url = f'https://nar.netkeiba.com/top/calendar.html?year={year}&month={month}'
+    else:
+      url = f'https://race.netkeiba.com/top/calendar.html?year={year}&month={month}'
+
+    req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    html = urlopen(req).read()
+    soup = BeautifulSoup(html, "html.parser")
+
+    time.sleep(1)
+
+    # リンクのある部分（開催日）をスクレイピング
+    date = soup.find_all("a", attrs={"href": re.compile(r'kaisai_date=[0-9]+')})
+
+    # race_dateの取得
+    for tag in date:
+      race_date = re.search(r'kaisai_date=([0-9]+)', tag["href"]).group(1)
+      race_date_list.append(race_date)
+
+      # kaisai_idの取得
       if cs:
-        url = f'https://nar.netkeiba.com/top/calendar.html?year={year}&month={month}'
-      else:
-        url = f'https://race.netkeiba.com/top/calendar.html?year={year}&month={month}'
+        kaisai_id_list = []
+        # race_date に対応する kaisai_id を取得
+        id = soup.find_all("a", attrs={"href": re.compile(rf'kaisai_date={race_date}&kaisai_id=[0-9]+')})
 
-      req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-      html = urlopen(req).read()
-      soup = BeautifulSoup(html, "html.parser")
+        for tag in id:
+          kaisai_id = re.search(r'kaisai_id=([0-9]+)', tag["href"]).group(1)
+          kaisai_id_list.append(kaisai_id)
 
-      time.sleep(1)
+        date_id_dict[race_date] = kaisai_id_list
 
-      # リンクのある部分（開催日）をスクレイピング
-      date = soup.find_all("a", attrs={"href": re.compile(r'kaisai_date=[0-9]+')})
-
-      # race_dateの取得
-      for tag in date:
-        race_date = re.search(r'kaisai_date=([0-9]+)', tag["href"]).group(1)
-        race_date_list.append(race_date)
-
-        # kaisai_idの取得
-        if cs:
-          kaisai_id_list = []
-          # race_date に対応する kaisai_id を取得
-          id = soup.find_all("a", attrs={"href": re.compile(rf'kaisai_date={race_date}&kaisai_id=[0-9]+')})
-
-          for tag in id:
-            kaisai_id = re.search(r'kaisai_id=([0-9]+)', tag["href"]).group(1)
-            kaisai_id_list.append(kaisai_id)
-
-          date_id_dict[race_date] = kaisai_id_list
+        
+    # 次の月へ
+    if month == 12:  # 12月の場合は次の年の1月
+      current_date = current_date.replace(year=year + 1, month=1)
+    else:  # それ以外の場合は月をインクリメント
+      current_date = current_date.replace(month=month + 1)
 
 
   return race_date_list, date_id_dict
