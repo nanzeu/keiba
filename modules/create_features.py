@@ -107,7 +107,9 @@ class Horse:
     # 'month' 列に基づいて 'season' 列を追加
     past_horse_results['season'] = past_horse_results['month'].apply(get_season)
 
-    # 直近2, 5回分のデータの追加
+    # 直近1, 2, 5回分のデータの追加
+    past_1_results = past_horse_results.sort_values('date')\
+      .groupby(['horse_id', 'reference_date']).apply(lambda x: x.tail(1)).reset_index(drop=True)
     past_2_results = past_horse_results.sort_values('date')\
       .groupby(['horse_id', 'reference_date']).apply(lambda x: x.tail(2)).reset_index(drop=True)
     past_5_results = past_horse_results.sort_values('date')\
@@ -127,6 +129,7 @@ class Horse:
     }
     
     features = past_horse_results.groupby(['horse_id', 'reference_date']).agg(aggregation_config).reset_index()
+    features_past_1 = past_1_results.groupby(['horse_id', 'reference_date']).agg(aggregation_config).reset_index()
     features_past_2 = past_2_results.groupby(['horse_id', 'reference_date']).agg(aggregation_config).reset_index()
     features_past_5 = past_5_results.groupby(['horse_id', 'reference_date']).agg(aggregation_config).reset_index()
 
@@ -160,10 +163,12 @@ class Horse:
     # 特徴量を統合
     features = features.merge(seasonal_rates, on=['horse_id', 'reference_date'], how='left')
    
+    features_past_1 = flatten_columns(features_past_1, '_past_1')
     features_past_2 = flatten_columns(features_past_2, '_past_2')
     features_past_5 = flatten_columns(features_past_5, '_past_5')
 
-    # 2回分と5回分の特徴量を結合
+    # 1, 2, 5回分の特徴量を結合
+    features = features.merge(features_past_1, on=['horse_id', 'reference_date'], how='left', suffixes=('', '_past_1'))
     features = features.merge(features_past_2, on=['horse_id', 'reference_date'], how='left', suffixes=('', '_past_2'))
     features = features.merge(features_past_5, on=['horse_id', 'reference_date'], how='left', suffixes=('', '_past_5'))
 
@@ -173,11 +178,13 @@ class Horse:
 
     for col in ['weather', 'race_type', 'ground_state', 'race_class']:
         mode_col = past_horse_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode')
-        past_5_mode_col = past_5_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_5')
+        past_1_mode_col = past_1_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_1')
         past_2_mode_col = past_2_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_2')
+        past_5_mode_col = past_5_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_5')
         features = features.merge(mode_col, on=['horse_id', 'reference_date'], how='left')
-        features = features.merge(past_5_mode_col, on=['horse_id', 'reference_date'], how='left')
+        features = features.merge(past_1_mode_col, on=['horse_id', 'reference_date'], how='left')
         features = features.merge(past_2_mode_col, on=['horse_id', 'reference_date'], how='left')
+        features = features.merge(past_5_mode_col, on=['horse_id', 'reference_date'], how='left')
     
     # 一貫性の指標を追加
     features['consistency'] = features['rank_max'] - features['rank_min']
@@ -186,7 +193,13 @@ class Horse:
     features['time_norm_by_mean'] = features['time_mean'] / features['course_len_mean']
     features['time_norm_by_median'] = features['time_median'] / features['course_len_median']
 
-    # 直近2回分と5回分の一貫性の指標を追加
+    # 直近1, 2, 5回分の一貫性の指標を追加
+    features['consistency_past_1'] = features['rank_max_past_1'] - features['rank_min_past_1']
+    features['3f_norm_by_mean_past_1'] = features['3_furlongs_mean_past_1'] / (600 / features['course_len_mean_past_1'])
+    features['3f_norm_by_median_past_1'] = features['3_furlongs_median_past_1'] / (600 / features['course_len_median_past_1'])
+    features['time_norm_by_mean_past_1'] = features['time_mean_past_1'] / features['course_len_mean_past_1']
+    features['time_norm_by_median_past_1'] = features['time_median_past_1'] / features['course_len_median_past_1']
+
     features['consistency_past_2'] = features['rank_max_past_2'] - features['rank_min_past_2']
     features['3f_norm_by_mean_past_2'] = features['3_furlongs_mean_past_2'] / (600 / features['course_len_mean_past_2'])
     features['3f_norm_by_median_past_2'] = features['3_furlongs_median_past_2'] / (600 / features['course_len_median_past_2'])
@@ -217,8 +230,19 @@ class Horse:
     features = features.merge(course_len_mode, on=['horse_id', 'reference_date'], how='left')
     features = features.merge(avg_mode_course_len, left_on=['horse_id', 'course_len_mode'], right_on=['horse_id', 'course_len'], how='left')
 
-    # コース距離の最頻値と同距離での馬の過去の成績（直近2回分と5回分）
-    course_len_mode_past_2 = past_2_results.groupby(['horse_id', 'reference_date'])['course_len'].apply(get_mode).reset_index(name='course_len_mode_past_2')
+    # コース距離の最頻値と同距離での馬の過去の成績（直近1, 2, 5回分）
+    course_len_mode_past_1 = past_1_results.\
+      groupby(['horse_id', 'reference_date'])['course_len'].apply(get_mode).reset_index(name='course_len_mode_past_1')
+    avg_mode_course_len_past_1 = past_1_results.groupby(['horse_id', 'course_len']).agg({
+        'rank': ['mean', 'min', 'max'],
+        'rank_diff': ['mean'],
+        '3_furlongs': ['mean'],
+        'time': 'mean',
+        'prize': ['mean', 'sum']
+    }).reset_index()
+
+    course_len_mode_past_2 = past_2_results.\
+      groupby(['horse_id', 'reference_date'])['course_len'].apply(get_mode).reset_index(name='course_len_mode_past_2')
     avg_mode_course_len_past_2 = past_2_results.groupby(['horse_id', 'course_len']).agg({
         'rank': ['mean', 'min', 'max'],
         'rank_diff': ['mean'],
@@ -227,7 +251,8 @@ class Horse:
         'prize': ['mean', 'sum']
     }).reset_index()
 
-    course_len_mode_past_5 = past_5_results.groupby(['horse_id', 'reference_date'])['course_len'].apply(get_mode).reset_index(name='course_len_mode_past_5')
+    course_len_mode_past_5 = past_5_results.\
+      groupby(['horse_id', 'reference_date'])['course_len'].apply(get_mode).reset_index(name='course_len_mode_past_5')
     avg_mode_course_len_past_5 = past_5_results.groupby(['horse_id', 'course_len']).agg({
         'rank': ['mean', 'min', 'max'],
         'rank_diff': ['mean'],
@@ -238,18 +263,29 @@ class Horse:
 
 
     # カラム名の調整
+    avg_mode_course_len_past_1.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in avg_mode_course_len_past_1.columns]
+    avg_mode_course_len_past_1.columns = [f'{col}_in_mode_course_len_past_1' for col in avg_mode_course_len_past_1.columns]
     avg_mode_course_len_past_2.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in avg_mode_course_len_past_2.columns]
     avg_mode_course_len_past_2.columns = [f'{col}_in_mode_course_len_past_2' for col in avg_mode_course_len_past_2.columns]
     avg_mode_course_len_past_5.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in avg_mode_course_len_past_5.columns]
     avg_mode_course_len_past_5.columns = [f'{col}_in_mode_course_len_past_5' for col in avg_mode_course_len_past_5.columns]
 
-    avg_mode_course_len_past_2.rename(columns={'horse_id__in_mode_course_len_past_2': 'horse_id', 'course_len__in_mode_course_len_past_2': 'course_len'}, inplace=True)
-    avg_mode_course_len_past_5.rename(columns={'horse_id__in_mode_course_len_past_5': 'horse_id', 'course_len__in_mode_course_len_past_5': 'course_len'}, inplace=True)
+    avg_mode_course_len_past_1.rename(columns={'horse_id__in_mode_course_len_past_1': 'horse_id', 'course_len__in_mode_course_len_past_1': 'course_len_past_1'}, inplace=True)
+    avg_mode_course_len_past_2.rename(columns={'horse_id__in_mode_course_len_past_2': 'horse_id', 'course_len__in_mode_course_len_past_2': 'course_len_past_2'}, inplace=True)
+    avg_mode_course_len_past_5.rename(columns={'horse_id__in_mode_course_len_past_5': 'horse_id', 'course_len__in_mode_course_len_past_5': 'course_len_past_5'}, inplace=True)
 
+    features = features.merge(course_len_mode_past_1, on=['horse_id', 'reference_date'], how='left')
+    features = features.merge(
+      avg_mode_course_len_past_1, left_on=['horse_id', 'course_len_mode_past_1'], right_on=['horse_id', 'course_len_past_1'], how='left'
+    )
     features = features.merge(course_len_mode_past_2, on=['horse_id', 'reference_date'], how='left')
-    features = features.merge(avg_mode_course_len_past_2, left_on=['horse_id', 'course_len_mode_past_2'], right_on=['horse_id', 'course_len'], how='left')
+    features = features.merge(
+      avg_mode_course_len_past_2, left_on=['horse_id', 'course_len_mode_past_2'], right_on=['horse_id', 'course_len_past_2'], how='left'
+    )
     features = features.merge(course_len_mode_past_5, on=['horse_id', 'reference_date'], how='left')
-    features = features.merge(avg_mode_course_len_past_5, left_on=['horse_id', 'course_len_mode_past_5'], right_on=['horse_id', 'course_len'], how='left')
+    features = features.merge(
+       avg_mode_course_len_past_5, left_on=['horse_id', 'course_len_mode_past_5'], right_on=['horse_id', 'course_len_past_5'], how='left'
+    )
 
     # 日数の特徴量と不要なカラムの削除は元のコードと同じ
     features['last_race_date'] = pd.to_datetime(features['date_max'])
@@ -259,8 +295,18 @@ class Horse:
     
     
     features.drop(columns=[
-      'course_len', 'course_len_x', 'course_len_y', 'last_race_date', 'date_max',
-      'time_mean', 'date_max_past_5', 'time_mean_past_5', 'date_max_past_2', 'time_mean_past_2'
+      'course_len',
+      'course_len_x', 
+      'course_len_y', 
+      'last_race_date', 
+      'date_max',
+      'time_mean', 
+      'date_max_past_5', 
+      'time_mean_past_5', 
+      'date_max_past_2', 
+      'time_mean_past_2',
+      'date_max_past_1', 
+      'time_mean_past_1',
     ], inplace=True, errors='ignore')
 
     # 季節のキーワードを含むカラムを選択
