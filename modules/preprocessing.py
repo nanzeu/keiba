@@ -210,13 +210,16 @@ def process_race_info(
   df_p['course_len'] = course_len_list
   df_p['course_len'] = df_p['course_len'].astype(int).replace(0, np.nan)
   if not cs:
-    regex_race_class = "|".join(race_class_mapping.keys())
+    sorted_keys = sorted(race_class_mapping.keys(), key=len, reverse=True)
+    regex_race_class = "|".join(sorted_keys)
     df_p['race_class'] = df['title'].str.extract(rf"({regex_race_class})")[0].map(race_class_mapping)
   df_p['place'] = info2_df['info2'].apply(lambda x: x[1]) 
   df_p['place'] = df_p['place'].str.extract(r'\d回(.*?)\d日目')
   df_p['place'] = df_p['place'].map(place_mapping)
 
   df_p['month'] = df_p['date'].dt.month
+  df_p['month_sin'] = np.sin(2 * np.pi * df_p['month'] / 12)
+  df_p['month_cos'] = np.cos(2 * np.pi * df_p['month'] / 12)
  
   def get_season(month):
     if month in [3, 4, 5]:
@@ -230,6 +233,8 @@ def process_race_info(
 
   # 'month' 列に基づいて 'season' 列を追加
   df_p['season'] = df_p['month'].apply(get_season)
+  df_p['season_sin'] = np.sin(2 * np.pi * df_p['season'] / 4)
+  df_p['season_cos'] = np.cos(2 * np.pi * df_p['season'] / 4)
 
   df_p.to_csv(os.path.join(output_dir, save_file_name), sep="\t")
 

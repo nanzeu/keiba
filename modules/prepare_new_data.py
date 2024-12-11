@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 import urllib
 import json
 from datetime import datetime, timedelta
+import numpy as np
 
 from modules.constants import local_paths, url_paths
 
@@ -28,6 +29,8 @@ with open(os.path.join(local_paths.MAPPING_DIR, "around.json"), 'r',encoding='ut
 with open(os.path.join(local_paths.MAPPING_DIR, "place.json"), 'r',encoding='utf-8_sig') as f:
   place_mapping = json.load(f)
 
+with open(os.path.join(local_paths.MAPPING_DIR, "grade_class.json"), 'r',encoding='utf-8_sig') as f:
+  grade_class_mapping = json.load(f)
 
 
 def get_html_candidates(
@@ -175,6 +178,9 @@ def create_candidates_info(
         span_list = soup.find_all('span')
         div_list = soup.find_all('div', class_="RaceData01")
 
+        # 対象となる要素をすべて取得
+        span_list_icon = soup.find_all('span', class_=lambda x: x and 'Icon_GradeType' in x) 
+
         place_set = False  # place を設定済みかを管理
         for span in span_list:
           type_len = re.search(r'(ダ|芝)(\d+)', span.text)
@@ -200,6 +206,21 @@ def create_candidates_info(
           if race_class and not cs:
             df['race_class'] = race_class.group()
             df['race_class'] = df['race_class'].map(race_class_mapping)
+
+            # gradeタグが存在する場合置き換える
+            for span_icon in span_list_icon:
+              class_list = span_icon.get('class', [])
+              for cls in class_list:
+                # Icon_GradeTypeの後の数字を正規表現で抽出
+                match = re.search(r'Icon_GradeType(\d+)', cls)
+                if match:
+                  grade = match.group(1)  # 抽出した数字（文字列）
+                  grade = str(grade)
+                  if grade == "13":  
+                    continue  # 13をスキップ
+                  # 対応表から変換（存在しない場合は無視）
+                  df['race_class'] = grade_class_mapping[grade]
+                  break  # 最初にマッチしたものだけを処理する
             
         for div in div_list:
           regex_around = '|'.join(around_mapping.keys())
@@ -211,7 +232,9 @@ def create_candidates_info(
 
         df['date'] = date
         df['date'] = pd.to_datetime(df['date'])
-
+        df['month'] = df['date'].dt.month
+        df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
+        df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
 
         def get_season(month):
           if month in [3, 4, 5]:
@@ -224,7 +247,9 @@ def create_candidates_info(
               return 3
 
         # 'month' 列に基づいて 'season' 列を追加
-        df['season'] = df['date'].dt.month.apply(get_season)
+        df['season'] = df['month'].apply(get_season)
+        df['season_sin'] = np.sin(2 * np.pi * df['season'] / 4)
+        df['season_cos'] = np.cos(2 * np.pi * df['season'] / 4)
 
       except IndexError as e:
         print(f"table not found at {race_id}")

@@ -3,6 +3,7 @@ from modules import scraping, create_features, predict
 from modules.predict import Net  # Net クラスのインポート
 
 import pandas as pd
+import numpy as np
 import os
 import torch
 import pickle
@@ -85,10 +86,12 @@ def predict_data(cs: bool = False):
         features.loc[:, features.columns.str.contains('jockey', case=False)] =\
             features.loc[:, features.columns.str.contains('jockey', case=False)].fillna(0)
         
+        features = create_features.add_cluster_and_features(features)
+        
         if not cs:
           # 新たにモデルを初期化
           torch.serialization.add_safe_globals([Net])
-          en_nn_basemodel = Net(input_size=70)
+          en_nn_basemodel = Net(input_size=200)
 
           # 保存されたモデル、重みを読み込み
           en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel.pth')))
@@ -119,8 +122,8 @@ def predict_data(cs: bool = False):
 
           # 予想
           en = predict.EnsembleModel(
-            train_df=None, returns_df=None, bet_type='sanrenpuku', threshold=0.65, 
-            max_bet=600, pivot_horse=True, select_num=60, final_model='xgb', save=False,
+            train_df=None, returns_df=None, bet_type='sanrenpuku', threshold=0.70, 
+            max_bet=600, pivot_horse=True, select_num=200, final_model='xgb', save=False,
             base_models=base_models, meta_models=meta_models, base_models_features=base_models_features, meta_models_features=meta_models_features, 
           )
 

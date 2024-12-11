@@ -2,6 +2,9 @@ import pandas as pd
 import os
 from tqdm import tqdm
 from sklearn.preprocessing import LabelEncoder
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from hdbscan import HDBSCAN
 
 from modules.constants import local_paths
 
@@ -135,10 +138,9 @@ class Horse:
 
      # カラム名をフラット化
     def flatten_columns(df, suffix):
-        df.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in df.columns]
-        df.rename(columns={'horse_id_': 'horse_id', 'reference_date_': 'reference_date'}, inplace=True)
-        return df
-
+      df.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in df.columns]
+      df.rename(columns={'horse_id_': 'horse_id', 'reference_date_': 'reference_date'}, inplace=True)
+      return df
 
     # シーズンごとの勝率、連対率、複勝率を計算
     def calculate_rates(df):
@@ -151,16 +153,29 @@ class Horse:
       return pd.Series([win_rate, place_rate, show_rate], index=['win_rate', 'place_rate', 'show_rate'])
 
     # 各シーズンごとに勝率、連対率、複勝率を計算し、特徴量として追加
+    past_1_rates = past_1_results.groupby(['horse_id', 'reference_date']).apply(calculate_rates).add_suffix('_past_1').reset_index()
+    past_2_rates = past_2_results.groupby(['horse_id', 'reference_date']).apply(calculate_rates).add_suffix('_past_2').reset_index()
+    past_5_rates = past_5_results.groupby(['horse_id', 'reference_date']).apply(calculate_rates).add_suffix('_past_5').reset_index()
+    past_rates = past_horse_results.groupby(['horse_id', 'reference_date']).apply(calculate_rates)
     seasonal_rates = past_horse_results.groupby(['horse_id', 'reference_date', 'season']).apply(calculate_rates)
 
     # unstack操作
     seasonal_rates = seasonal_rates.unstack().reset_index()
 
     # カラムをフラット化
+    past_1_rates = flatten_columns(past_1_rates, '_past_1')
+    past_2_rates = flatten_columns(past_2_rates, '_past_2')
+    past_5_rates = flatten_columns(past_5_rates, '_past_5')
+    past_rates = flatten_columns(past_rates, '')
     seasonal_rates = flatten_columns(seasonal_rates, '')
+
     features = flatten_columns(features, '')
 
     # 特徴量を統合
+    features = features.merge(past_1_rates, on=['horse_id', 'reference_date'], how='left')
+    features = features.merge(past_2_rates, on=['horse_id', 'reference_date'], how='left')
+    features = features.merge(past_5_rates, on=['horse_id', 'reference_date'], how='left')
+    features = features.merge(past_rates, on=['horse_id', 'reference_date'], how='left')
     features = features.merge(seasonal_rates, on=['horse_id', 'reference_date'], how='left')
    
     features_past_1 = flatten_columns(features_past_1, '_past_1')
@@ -172,28 +187,39 @@ class Horse:
     features = features.merge(features_past_2, on=['horse_id', 'reference_date'], how='left', suffixes=('', '_past_2'))
     features = features.merge(features_past_5, on=['horse_id', 'reference_date'], how='left', suffixes=('', '_past_5'))
 
+    # 出場回数を特徴量として追加
+    total_races = past_horse_results.groupby(['horse_id', 'reference_date']).size().reset_index(name='n_participations')
+    features = features.merge(total_races, on=['horse_id', 'reference_date'], how='left')
+
     # カテゴリ変数の最頻値を特徴量として追加
     def get_mode(series):
-        return series.mode()[0] if not series.mode().empty else None
+      return series.mode()[0] if not series.mode().empty else None
 
     for col in ['weather', 'race_type', 'ground_state', 'race_class']:
-        mode_col = past_horse_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode')
-        past_1_mode_col = past_1_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_1')
-        past_2_mode_col = past_2_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_2')
-        past_5_mode_col = past_5_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_5')
-        features = features.merge(mode_col, on=['horse_id', 'reference_date'], how='left')
-        features = features.merge(past_1_mode_col, on=['horse_id', 'reference_date'], how='left')
-        features = features.merge(past_2_mode_col, on=['horse_id', 'reference_date'], how='left')
-        features = features.merge(past_5_mode_col, on=['horse_id', 'reference_date'], how='left')
-    
-    # 一貫性の指標を追加
+      mode_col = past_horse_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode')
+      past_1_mode_col = past_1_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_1')
+      past_2_mode_col = past_2_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_2')
+      past_5_mode_col = past_5_results.groupby(['horse_id', 'reference_date'])[col].apply(get_mode).reset_index(name=f'{col}_mode_past_5')
+      features = features.merge(mode_col, on=['horse_id', 'reference_date'], how='left')
+      features = features.merge(past_1_mode_col, on=['horse_id', 'reference_date'], how='left')
+      features = features.merge(past_2_mode_col, on=['horse_id', 'reference_date'], how='left')
+      features = features.merge(past_5_mode_col, on=['horse_id', 'reference_date'], how='left')
+
+    season_mode = past_horse_results.groupby(['horse_id', 'reference_date'])['season'].apply(get_mode).reset_index(name='season_mode')
+    features = features.merge(season_mode, on=['horse_id', 'reference_date'], how='left')
+    season_mapping = {'spring': 0, 'summer': 1, 'autumn': 2, 'winter': 3}
+    features['season_mode'] = features['season_mode'].map(season_mapping)
+    features['season_mode_sin'] = np.sin(2 * np.pi * features['season_mode'] / 4)
+    features['season_mode_cos'] = np.cos(2 * np.pi * features['season_mode'] / 4)
+            
+    # 各指標の追加
     features['consistency'] = features['rank_max'] - features['rank_min']
     features['3f_norm_by_mean'] = features['3_furlongs_mean'] / (600 / features['course_len_mean'])
     features['3f_norm_by_median'] = features['3_furlongs_median'] / (600 / features['course_len_median'])
     features['time_norm_by_mean'] = features['time_mean'] / features['course_len_mean']
     features['time_norm_by_median'] = features['time_median'] / features['course_len_median']
 
-    # 直近1, 2, 5回分の一貫性の指標を追加
+    # 直近1, 2, 5回分の各指標の追加
     features['consistency_past_1'] = features['rank_max_past_1'] - features['rank_min_past_1']
     features['3f_norm_by_mean_past_1'] = features['3_furlongs_mean_past_1'] / (600 / features['course_len_mean_past_1'])
     features['3f_norm_by_median_past_1'] = features['3_furlongs_median_past_1'] / (600 / features['course_len_median_past_1'])
@@ -287,7 +313,7 @@ class Horse:
        avg_mode_course_len_past_5, left_on=['horse_id', 'course_len_mode_past_5'], right_on=['horse_id', 'course_len_past_5'], how='left'
     )
 
-    # 日数の特徴量と不要なカラムの削除は元のコードと同じ
+    # 日数の特徴量と不要なカラムの削除
     features['last_race_date'] = pd.to_datetime(features['date_max'])
     features['reference_date'] = pd.to_datetime(features['reference_date'])
     features['days_since_last_race'] = (features['reference_date'] - features['last_race_date']).dt.days
@@ -321,7 +347,7 @@ class Horse:
         if col != 'horse_id':  # horse_idはエンコードしない
           self.peds_df[col] = LabelEncoder().fit_transform(self.peds_df[col])
       features = features.merge(self.peds_df, on='horse_id', how='left')
-    
+
     return features
 
 
@@ -459,3 +485,45 @@ class Jockey:
     features.fillna(0, inplace=True)
 
     return features
+  
+
+def add_cluster_and_features(features):
+  features.dropna(inplace=True)
+
+  seasonal_cluster_f = ['season_sin', 'season_cos', 'season_mode_sin', 'season_mode_cos',
+                        'show_rate_spring', 'show_rate_summer', 'show_rate_autumn', 'show_rate_winter']
+
+  # スケーリング
+  scaler = StandardScaler()
+  scaled_features = scaler.fit_transform(features[seasonal_cluster_f])
+
+  # HDBSCANの実行例（epsの調整不要）
+  clusterer = HDBSCAN(min_cluster_size=5)
+  clusters = clusterer.fit_predict(scaled_features)
+  clusters[clusters == -1] = 0
+
+  # クラスタラベルをデータフレームに追加
+  features['seasonal_cluster'] = clusters
+  
+  course_cluster_f = ['course_len', 'race_type', 'show_rate', 'show_rate_past_5', 'show_rate_past_2', 'show_rate_past_1']
+
+  # スケーリング
+  scaler = StandardScaler()
+  scaled_features = scaler.fit_transform(features[course_cluster_f])
+
+  # HDBSCANの実行例（epsの調整不要）
+  clusterer = HDBSCAN(min_cluster_size=5)
+  clusters = clusterer.fit_predict(scaled_features)
+  clusters[clusters == -1] = 0
+
+  # クラスタラベルをデータフレームに追加
+  features['course_cluster'] = clusters
+
+  features['log_days_since_last_race'] = np.log(features['days_since_last_race'] + 1)
+  features['course_len_x_ground_state'] = features['course_len'] * features['ground_state_mode']
+  features['log_course_len_x_ground_state'] = np.log(features['course_len_x_ground_state'] + 1)
+
+  return features
+
+
+

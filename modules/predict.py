@@ -194,7 +194,6 @@ class PredBase:
     """予測に基づく払戻額を計算し、賭け金額を追加"""
     if not bet_only:
       df = self.predict_target(pred_df)
-
       df = df.loc[df['predicted_target'] == 1, ['race_id', 'win_odds', 'rank', 'predicted_target', 'predicted_proba']]
 
       df_add_returns = df.merge(self.returns_df, on='race_id', how='left')
@@ -460,7 +459,9 @@ class RFModel(PredBase):
     print("Accuracy:", self.accuracy)
 
     # 特徴量の重要度も表示
-    print("Selected Feature Importance:\n", feature_importance.head(self.select_num))
+    print("Selected Feature Importance:\n")
+    for feature, importance in zip(feature_importance['feature'], feature_importance['importance']):
+      print(f"{feature}: {importance}")
 
     self.model = model
    
@@ -803,7 +804,9 @@ class LGBModel(PredBase):
     }).sort_values('importance', ascending=False)
 
     # LightGBMの場合、特徴量の重要度を表示
-    print("Selected Feature Importance:\n", feature_importance.head(self.select_num))
+    print("Selected Feature Importance:\n")
+    for feature, importance in zip(feature_importance['feature'], feature_importance['importance']):
+      print(f"{feature}: {importance}")
 
     self.model = model
 
@@ -951,7 +954,9 @@ class XGBModel(PredBase):
     }).sort_values('importance', ascending=False)
 
     # 特徴量の重要度も表示
-    print("Selected Feature Importance:\n", feature_importance.head(self.select_num))
+    print("Selected Feature Importance:\n")
+    for feature, importance in zip(feature_importance['feature'], feature_importance['importance']):
+      print(f"{feature}: {importance}")
 
     self.model = model
 
