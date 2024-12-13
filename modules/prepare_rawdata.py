@@ -184,7 +184,8 @@ def create_horse_results(
 
   concat_df = pd.concat(dfs.values())
   concat_df.index.name = "horse_id"
-  concat_df.columns = concat_df.columns.str.replace(' ', '')
+  # 文字列型のみを対象に列名の空白を削除
+  concat_df.columns = concat_df.columns.map(lambda x: str(x).replace(' ', ''))
   concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
   return concat_df
 
