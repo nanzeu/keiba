@@ -327,9 +327,6 @@ class PredBase:
     # グラフの作成
     plt.figure(figsize=(6, 4), layout='constrained')
     plt.plot(df.index + 1, (df['returns_rate'] * 100), marker='.', color='b')
-    # start_point = int(betting_count * 0.1)
-    # plt.xlim([start_point, betting_count])
-    # plt.xticks(np.arange(start_point, betting_count + 1, step=200))
     plt.title('賭けた回数と回収率の推移', fontsize=16)
     plt.xlabel('賭けた回数', fontsize=12)
     plt.ylabel('回収率 (%)', fontsize=12)

@@ -130,7 +130,7 @@ def predict_data(cs: bool = False):
         else:
           # 新たにモデルを初期化
           torch.serialization.add_safe_globals([Net])
-          en_nn_basemodel = Net(input_size=60)
+          en_nn_basemodel = Net(input_size=200)
 
           # 保存されたモデル、重みを読み込み
           en_nn_basemodel.load_state_dict(torch.load(os.path.join(local_paths.MODELS_DIR, 'en_nn_basemodel_cs.pth')))
@@ -162,8 +162,8 @@ def predict_data(cs: bool = False):
 
           # 予想
           en = predict.EnsembleModel(
-            train_df=None, returns_df=None, bet_type='umaren', threshold=0.65, 
-            max_bet=300, pivot_horse=True, select_num=60, final_model='xgb', cs=True, save=False,
+            train_df=None, returns_df=None, bet_type='umaren', threshold=0.70, 
+            max_bet=300, pivot_horse=True, select_num=200, final_model='xgb', cs=True, save=False,
             base_models=base_models, meta_models=meta_models, base_models_features=base_models_features, meta_models_features=meta_models_features, 
           )
 
@@ -199,6 +199,10 @@ def predict_data(cs: bool = False):
         )
         pred_df[(pred_df['bet_sum'] > 0)].to_csv(
           save_name, sep="\t", encoding='utf-8'
+        )
+
+        features.to_csv(
+          f'features_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}', sep="\t", encoding='utf-8'
         )
 
       except Exception as e:

@@ -8,77 +8,132 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from modules.constants import local_paths
 
 
-def process_html_path(html_path: str) -> pd.DataFrame:
-  """
-  指定された HTML パスを処理し、必要な DataFrame を返す。
-  """
-  try:
-    race_id = re.search(r'\d{12}', html_path).group()
-    with open(html_path, "rb") as f:
-      html = f.read()
-      soup = BeautifulSoup(html, "lxml").find("table", class_="race_table_01 nk_tb_common")
-      df = pd.read_html(html)[0]
+# def process_html_path(html_path: str) -> pd.DataFrame:
+#   """
+#   指定された HTML パスを処理し、必要な DataFrame を返す。
+#   """
+#   try:
+#     race_id = re.search(r'\d{12}', html_path).group()
+#     with open(html_path, "rb") as f:
+#       html = f.read()
+#       soup = BeautifulSoup(html, "lxml").find("table", class_="race_table_01 nk_tb_common")
+#       df = pd.read_html(html)[0]
 
-      # horse_id 列追加
-      a_list = soup.find_all("a", href=re.compile(r'^/horse/'))
-      horse_id_list = [re.findall(r'\d{10}', a["href"])[0] for a in a_list]
-      df["horse_id"] = horse_id_list
+#       # horse_id 列追加
+#       a_list = soup.find_all("a", href=re.compile(r'^/horse/'))
+#       horse_id_list = [re.findall(r'\d{10}', a["href"])[0] for a in a_list]
+#       df["horse_id"] = horse_id_list
 
-      # jockey_id 列追加
-      a_list = soup.find_all("a", href=re.compile(r'^/jockey/'))
-      jockey_id_list = [str(re.findall(r'(?<=/jockey/result/recent/)[\w\d]+', a["href"])[0]).zfill(5) for a in a_list]
-      df["jockey_id"] = jockey_id_list
+#       # jockey_id 列追加
+#       a_list = soup.find_all("a", href=re.compile(r'^/jockey/'))
+#       jockey_id_list = [str(re.findall(r'(?<=/jockey/result/recent/)[\w\d]+', a["href"])[0]).zfill(5) for a in a_list]
+#       df["jockey_id"] = jockey_id_list
 
-      # trainer_id 列追加
-      a_list = soup.find_all("a", href=re.compile(r'^/trainer/'))
-      trainer_id_list = [str(re.findall(r'(?<=/trainer/result/recent/)[\w\d]+', a["href"])[0]).zfill(5) for a in a_list]
-      df["trainer_id"] = trainer_id_list
+#       # trainer_id 列追加
+#       a_list = soup.find_all("a", href=re.compile(r'^/trainer/'))
+#       trainer_id_list = [str(re.findall(r'(?<=/trainer/result/recent/)[\w\d]+', a["href"])[0]).zfill(5) for a in a_list]
+#       df["trainer_id"] = trainer_id_list
 
-    # race_id をインデックスに設定
-    df.index = [race_id] * len(df)
-    return df
+#     # race_id をインデックスに設定
+#     df.index = [race_id] * len(df)
+#     return df
 
-  except (IndexError, AttributeError) as e:
-    print(f"Error processing {html_path}: {e}")
-    return pd.DataFrame()  # エラー時は空の DataFrame を返す
+#   except (IndexError, AttributeError) as e:
+#     print(f"Error processing {html_path}: {e}")
+#     return pd.DataFrame()  # エラー時は空の DataFrame を返す
 
 
 
+# def create_results(
+#   html_paths_race: list[str],
+#   save_dir: str = local_paths.RAW_DIR,
+#   save_filename: str = "results.csv",
+#   cs: bool = False
+# ) -> pd.DataFrame:
+#     """
+#     複数の HTML ファイルを並行処理で読み込み、指定の保存先に CSV ファイルとして保存する。
+#     """
+#     if cs:
+#       save_dir = local_paths.RAW_CS_DIR
+
+#       # 条件に合わないファイルだけを処理
+#       skip_pattern = re.compile(r'^\d{4}(65|55|54|45|46|36|51)\d*')
+#       html_paths_race = [path for path in html_paths_race if not skip_pattern.search(os.path.basename(path))]
+
+#     dfs = {}
+#     with ThreadPoolExecutor() as executor:
+#       futures = {}
+#       for html_path in html_paths_race:
+#         # 条件を満たさない場合のみ、並行処理で処理を実行
+#         futures[executor.submit(process_html_path, html_path)] = html_path
+
+#       for future in tqdm(as_completed(futures), total=len(futures)):
+#         df = future.result()
+#         if not df.empty:
+#           race_id = df.index[0]
+#           dfs[race_id] = df
+
+#     # 結果の結合と保存
+#     concat_df = pd.concat(dfs.values())
+#     concat_df.index.name = "race_id"
+#     concat_df.columns = concat_df.columns.str.replace(' ', '')
+#     concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
+#     return concat_df
+
+
+    
 def create_results(
   html_paths_race: list[str],
   save_dir: str = local_paths.RAW_DIR,
   save_filename: str = "results.csv",
   cs: bool = False
 ) -> pd.DataFrame:
-    """
-    複数の HTML ファイルを並行処理で読み込み、指定の保存先に CSV ファイルとして保存する。
-    """
-    if cs:
-      save_dir = local_paths.RAW_CS_DIR
+  """
+  複数の HTML ファイルを並行処理で読み込み、指定の保存先に CSV ファイルとして保存する。
+  """
+  if cs:
+    save_dir = local_paths.RAW_CS_DIR
 
-      # 条件に合わないファイルだけを処理
-      skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
-      html_paths_race = [path for path in html_paths_race if not skip_pattern.search(os.path.basename(path))]
+    # 条件に合わないファイルだけを処理
+    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|46|36|51)\d*')
+    html_paths_race = [path for path in html_paths_race if not skip_pattern.search(os.path.basename(path))]
 
-    dfs = {}
-    with ThreadPoolExecutor() as executor:
-      futures = {}
-      for html_path in html_paths_race:
-        # 条件を満たさない場合のみ、並行処理で処理を実行
-        futures[executor.submit(process_html_path, html_path)] = html_path
+  dfs = {}
+  for html_path in tqdm(html_paths_race):
+    with open(html_path, "rb") as f:
+      try:
+        race_id = re.search(r'\d{12}', html_path).group()
+        html = f.read()
+        soup = BeautifulSoup(html, "lxml").find("table", class_="race_table_01 nk_tb_common")
+        df = pd.read_html(html)[0]
 
-      for future in tqdm(as_completed(futures), total=len(futures)):
-        df = future.result()
-        if not df.empty:
-          race_id = df.index[0]
-          dfs[race_id] = df
+        # horse_id 列追加
+        a_list = soup.find_all("a", href=re.compile(r'^/horse/'))
+        horse_id_list = [re.findall(r'\d{10}', a["href"])[0] for a in a_list]
+        df["horse_id"] = horse_id_list
 
-    # 結果の結合と保存
-    concat_df = pd.concat(dfs.values())
-    concat_df.index.name = "race_id"
-    concat_df.columns = concat_df.columns.str.replace(' ', '')
-    concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
-    return concat_df
+        # jockey_id 列追加
+        a_list = soup.find_all("a", href=re.compile(r'^/jockey/'))
+        jockey_id_list = [str(re.findall(r'(?<=/jockey/result/recent/)[\w\d]+', a["href"])[0]).zfill(5) for a in a_list]
+        df["jockey_id"] = jockey_id_list
+
+        # trainer_id 列追加
+        a_list = soup.find_all("a", href=re.compile(r'^/trainer/'))
+        trainer_id_list = [str(re.findall(r'(?<=/trainer/result/recent/)[\w\d]+', a["href"])[0]).zfill(5) for a in a_list]
+        df["trainer_id"] = trainer_id_list
+
+        df.index = [race_id] * len(df)
+        dfs[race_id] = df
+
+      except IndexError as e:
+        print(f"table not found at {race_id}")
+        continue
+
+  concat_df = pd.concat(dfs.values())
+  concat_df.index.name = "race_id"
+  concat_df.columns = concat_df.columns.str.replace(' ', '')
+  concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
+  return concat_df
 
 
 
@@ -98,6 +153,8 @@ def process_html_file(html_path: str) -> pd.DataFrame:
 
   return None
 
+
+
 def create_horse_results(
   html_paths_horse: list[str],
   save_dir: str = local_paths.RAW_DIR,
@@ -110,50 +167,28 @@ def create_horse_results(
   if cs:
     save_dir = local_paths.RAW_CS_DIR
 
-  dfs = []
+  dfs = {}
+  for html_path in tqdm(html_paths_horse):
+    with open(html_path, "rb") as f:
+      try:
+        horse_id = re.search(r'\d{10}', html_path).group()
+        html = f.read()
+        df = pd.read_html(html)[3]
 
-  # 並行処理で HTML ファイルを読み込む
-  with ThreadPoolExecutor() as executor:
-    futures = {executor.submit(process_html_file, html_path): html_path for html_path in html_paths_horse}
+        df.index = [horse_id] * len(df)
+        dfs[horse_id] = df
 
-    for future in tqdm(as_completed(futures), total=len(futures)):
-      df = future.result()
-      if df is not None:
-          dfs.append(df)
+      except IndexError as e:
+        print(f"table not found at {horse_id}")
+        continue
 
-  # 全データフレームを結合
-  concat_df = pd.concat(dfs)
+  concat_df = pd.concat(dfs.values())
+  concat_df.index.name = "horse_id"
   concat_df.columns = concat_df.columns.str.replace(' ', '')
   concat_df.to_csv(os.path.join(save_dir, save_filename), sep="\t")
   return concat_df
 
-
-
-def process_html_path(html_path: str) -> pd.DataFrame:
-  """
-  指定された HTML パスを処理し、DataFrame を返す。
-  """
-  try:
-    with open(html_path, "rb") as f:
-      html = f.read()
-      soup = BeautifulSoup(html, "lxml").find('div', class_='data_intro')
-      info_dict = {}
-      info_dict['title'] = soup.find('h1').text
-      p_list = soup.find_all('p')
-      info_dict['info1'] = re.findall(r'[\w+:]+', p_list[0].text.replace(' ', ''))
-      info_dict['info2'] = re.findall(r'\w+', p_list[1].text)
-
-      df = pd.DataFrame().from_dict(info_dict, orient='index').T
-
-      race_id = re.search(r'\d{12}', html_path).group()
-      df.index = [race_id] * len(df)
-      return df
-
-  except (IndexError, AttributeError) as e:
-    print(f"Error processing {html_path}: {e}")
-    return pd.DataFrame()  # エラー時は空の DataFrame を返す
-
-
+  
 
 def create_race_info(
   html_paths_race: list[str],
@@ -165,21 +200,31 @@ def create_race_info(
   if cs:
     save_dir = local_paths.RAW_CS_DIR
     # 条件に合わないファイルだけを処理
-    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
+    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|46|36|51)\d*')
     html_paths_race = [path for path in html_paths_race if not skip_pattern.search(os.path.basename(path))]
 
-  # 並行処理で HTML ファイルを処理
   dfs = {}
-  with ThreadPoolExecutor() as executor:
-    futures = {executor.submit(process_html_path, html_path): html_path for html_path in html_paths_race}
+  for html_path in tqdm(html_paths_race):
+    with open(html_path, "rb") as f:
+      try:
+        html = f.read()
+        soup = BeautifulSoup(html, "lxml").find('div', class_='data_intro')
+        info_dict = {}
+        info_dict['title'] = soup.find('h1').text
+        p_list = soup.find_all('p')
+        info_dict['info1'] = re.findall(r'[\w+:]+',p_list[0].text.replace(' ', ''))
+        info_dict['info2'] = re.findall(r'\w+', p_list[1].text)
 
-    for future in tqdm(as_completed(futures), total=len(futures)):
-      df = future.result()
-      if not df.empty:
-        race_id = df.index[0]
+        df = pd.DataFrame().from_dict(info_dict, orient='index').T
+
+        race_id = re.search(r'\d{12}', html_path).group()
+        df.index = [race_id] * len(df)
         dfs[race_id] = df
 
-  # 結果の結合と保存
+      except IndexError as e:
+        print(f"table not found at {race_id}")
+        continue
+
   concat_df = pd.concat(dfs.values())
   concat_df.index.name = "race_id"
   concat_df.columns = concat_df.columns.str.replace(' ', '')
@@ -254,7 +299,7 @@ def create_returns(
 def process_peds_html_file(html_path: str) -> pd.DataFrame:
   try:
     horse_id = re.search(r'\d{10}', html_path).group()  # horse_idを抽出
-    df = pd.read_html(html_path)[1]  # `pd.read_html`でHTMLファイルを読み込み
+    df = pd.read_html(html_path)[2]  # `pd.read_html`でHTMLファイルを読み込み
 
     # horse_id列を追加
     df['horse_id'] = horse_id

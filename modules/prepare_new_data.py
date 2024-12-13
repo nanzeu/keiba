@@ -162,7 +162,7 @@ def create_candidates_info(
   if cs:
     output_dir = local_paths.CANDIDATES_CS_DIR
     # 条件に合わないファイルだけを処理
-    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|44|46|36|51)\d*')
+    skip_pattern = re.compile(r'^\d{4}(65|55|54|45|46|36|51)\d*')
     html_paths_candidates = [path for path in html_paths_candidates if not skip_pattern.search(os.path.basename(path))]
   
   date = (datetime.now() + timedelta(days=1)).date()
