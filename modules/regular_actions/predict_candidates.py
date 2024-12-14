@@ -202,7 +202,7 @@ def predict_data(cs: bool = False):
         )
 
         features.to_csv(
-          f'features_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}', sep="\t", encoding='utf-8'
+          f'features_{(datetime.now() + timedelta(days=1)).date().strftime("%Y%m%d")}.csv', sep="\t", encoding='utf-8'
         )
 
       except Exception as e:
