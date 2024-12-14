@@ -173,7 +173,7 @@ def create_horse_results(
       try:
         horse_id = re.search(r'\d{10}', html_path).group()
         html = f.read()
-        df = pd.read_html(html)[3]
+        df = pd.read_html(html)[2] # ずれる可能性あり
 
         df.index = [horse_id] * len(df)
         dfs[horse_id] = df
@@ -300,7 +300,7 @@ def create_returns(
 def process_peds_html_file(html_path: str) -> pd.DataFrame:
   try:
     horse_id = re.search(r'\d{10}', html_path).group()  # horse_idを抽出
-    df = pd.read_html(html_path)[2]  # `pd.read_html`でHTMLファイルを読み込み
+    df = pd.read_html(html_path)[1]  # `pd.read_html`でHTMLファイルを読み込み
 
     # horse_id列を追加
     df['horse_id'] = horse_id
