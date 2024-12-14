@@ -30,7 +30,7 @@ def save_data(cs: bool = False):
       race_date, id = race_date  # タプルの最初の要素をrace_dateに設定
     
     race_date_obj = datetime.strptime(race_date, '%Y%m%d')
-    if (race_date_obj - timedelta(days=0)).date() == datetime.now().date():
+    if (race_date_obj - timedelta(days=1)).date() == datetime.now().date():
       # レース前日の場合、その日のrace_id_listからデータを取得し、
       # candidates、candidates_infoとして保存し前処理する。
       if cs:
